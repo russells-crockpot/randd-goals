@@ -1,0 +1,13 @@
+[package]
+name = "randd-goals"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.46", features = ["derive", "unicode", "wrap_help", "cargo", "unstable-doc"] }
+color-eyre = { version = "0.6.5", features = ["color-spantrace", "tracing-error"] }
+paste = "1.0.15"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_path_to_error = "0.1.17"
+serde_yml = "0.0.12"
+snafu = { version = "0.8.8", default-features = false, features = ["std", "rust_1_81", "guide", "backtrace", "futures"] }

@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks.git
+    rev: v4.3.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-xml
+      - id: check-yaml
+      - id: trailing-whitespace
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+      - id: clippy
+        args: [--all-features]
+  - repo: https://github.com/codespell-project/codespell.git
+    rev: v2.1.0
+    hooks:
+      - id: codespell
+        exclude: .*(?:\.spelling-wordlist\.txt|\.lock|Cargo.toml|.vim)
+        args: [-I, .spelling-wordlist.txt]
+        #args: [--verbose]
+
+# vi: shiftwidth=2
