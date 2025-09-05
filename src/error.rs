@@ -2,7 +2,8 @@ use camino::FromPathBufError;
 use paste::paste;
 use serde_yml::Error as YamlError;
 use snafu::{Backtrace, Snafu};
-use std::{io::Error as IoError, string::FromUtf8Error};
+use std::{io::Error as IoError, result::Result as BaseResult, string::FromUtf8Error};
+use time::error::IndeterminateOffset as IndeterminateOffsetError;
 
 #[derive(Snafu, Debug)]
 #[snafu(visibility(pub))]
@@ -23,27 +24,53 @@ pub enum Error {
         source: FromPathBufError,
         backtrace: Backtrace,
     },
+    IndeterminateOffset {
+        source: IndeterminateOffsetError,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("No goal named '{slug}' was found."))]
+    GoalNotFound { slug: String, backtrace: Backtrace },
+    #[snafu(display("The current state for the {slug} goal has not be loaded."))]
+    GoalStateNotLoaded { slug: String, backtrace: Backtrace },
     #[snafu(display("{message}"))]
     Other {
         message: String,
-        //backtrace: Backtrace,
+        backtrace: Backtrace,
     },
 }
 
 impl Error {
-    pub fn backtrace(&self) -> Option<&Backtrace> {
+    pub fn backtrace(&self) -> &Backtrace {
         match self {
-            Self::Io { backtrace, .. } => Some(backtrace),
-            Self::FromUtf8 { backtrace, .. } => Some(backtrace),
-            Self::Yaml { backtrace, .. } => Some(backtrace),
-            Self::NonUtf8Path { backtrace, .. } => Some(backtrace),
-            _ => None,
+            Self::Io { backtrace, .. } => backtrace,
+            Self::FromUtf8 { backtrace, .. } => backtrace,
+            Self::Yaml { backtrace, .. } => backtrace,
+            Self::NonUtf8Path { backtrace, .. } => backtrace,
+            Self::GoalStateNotLoaded { backtrace, .. } => backtrace,
+            Self::GoalNotFound { backtrace, .. } => backtrace,
+            Self::IndeterminateOffset { backtrace, .. } => backtrace,
+            Self::Other { backtrace, .. } => backtrace,
         }
     }
 
     pub fn simple<S: AsRef<str>>(message: S) -> Self {
         Self::Other {
             message: String::from(message.as_ref()),
+            backtrace: Backtrace::capture(),
+        }
+    }
+
+    pub fn goal_not_found<S: AsRef<str>>(slug: S) -> Self {
+        Self::GoalNotFound {
+            slug: String::from(slug.as_ref()),
+            backtrace: Backtrace::capture(),
+        }
+    }
+
+    pub fn goal_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
+        Self::GoalStateNotLoaded {
+            slug: String::from(slug.as_ref()),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -73,5 +100,6 @@ impl_from! {FromPathBufError, NonUtf8Path}
 impl_from! {Io}
 impl_from! {FromUtf8}
 impl_from! {Yaml}
+impl_from! {IndeterminateOffset}
 
-pub type Result<V> = core::result::Result<V, Error>;
+pub type Result<V> = BaseResult<V, Error>;
