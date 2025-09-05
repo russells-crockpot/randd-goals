@@ -28,6 +28,8 @@ pub enum Error {
         source: IndeterminateOffsetError,
         backtrace: Backtrace,
     },
+    #[snafu(display("A goal named '{slug}' already exists."))]
+    GoalAlreadyExists { slug: String, backtrace: Backtrace },
     #[snafu(display("No goal named '{slug}' was found."))]
     GoalNotFound { slug: String, backtrace: Backtrace },
     #[snafu(display("The current state for the {slug} goal has not be loaded."))]
@@ -48,26 +50,38 @@ impl Error {
             Self::NonUtf8Path { backtrace, .. } => backtrace,
             Self::GoalStateNotLoaded { backtrace, .. } => backtrace,
             Self::GoalNotFound { backtrace, .. } => backtrace,
+            Self::GoalAlreadyExists { backtrace, .. } => backtrace,
             Self::IndeterminateOffset { backtrace, .. } => backtrace,
             Self::Other { backtrace, .. } => backtrace,
         }
     }
 
-    pub fn simple<S: AsRef<str>>(message: S) -> Self {
+    #[inline(always)]
+    pub(crate) fn simple<S: AsRef<str>>(message: S) -> Self {
         Self::Other {
             message: String::from(message.as_ref()),
             backtrace: Backtrace::capture(),
         }
     }
 
-    pub fn goal_not_found<S: AsRef<str>>(slug: S) -> Self {
+    #[inline(always)]
+    pub(crate) fn goal_not_found<S: AsRef<str>>(slug: S) -> Self {
         Self::GoalNotFound {
             slug: String::from(slug.as_ref()),
             backtrace: Backtrace::capture(),
         }
     }
 
-    pub fn goal_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
+    #[inline(always)]
+    pub(crate) fn goal_already_exists<S: AsRef<str>>(slug: S) -> Self {
+        Self::GoalAlreadyExists {
+            slug: String::from(slug.as_ref()),
+            backtrace: Backtrace::capture(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn goal_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
         Self::GoalStateNotLoaded {
             slug: String::from(slug.as_ref()),
             backtrace: Backtrace::capture(),
@@ -78,6 +92,7 @@ impl Error {
 macro_rules! impl_from {
     ($type:path, $error:ident, $base_error:ident) => {
         impl From<$type> for $base_error {
+            #[inline(always)]
             fn from(error: $type) -> Self {
                 Self::$error {
                     source: error,

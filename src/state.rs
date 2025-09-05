@@ -1,12 +1,11 @@
 use crate::{
-    Error, Result, STATE_FILE_PATH,
+    Error, RcCell, Result, STATE_FILE_PATH,
     config::{Config, DisabledOptions, GoalConfig},
     util::{now, today},
 };
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
     collections::HashMap,
     fs::{self, OpenOptions},
 };
@@ -17,7 +16,7 @@ use time::{Date, Duration, OffsetDateTime};
 #[serde(default)]
 pub struct StateModel {
     pub last_generated: OffsetDateTime,
-    pub goals: HashMap<String, RefCell<GoalState>>,
+    pub goals: HashMap<String, RcCell<GoalState>>,
     pub todays_goals: Vec<String>,
 }
 
@@ -103,8 +102,9 @@ impl State {
         for (slug, goal_state) in model.goals.iter() {
             if let Some(goal_cfg) = config.get_goal(slug) {
                 let goal = Goal {
+                    slug: slug.clone(),
                     config: goal_cfg,
-                    state: RefCell::clone(goal_state),
+                    state: RcCell::clone(goal_state),
                 };
                 goals.insert(slug.clone(), goal);
             } else {
@@ -128,20 +128,86 @@ impl State {
     pub fn enable_goal<S: AsRef<str>>(&self, slug: S) -> Result<()> {
         if let Some(goal) = self.goals.get(slug.as_ref()) {
             goal.enable();
+            self.save()?;
             Ok(())
         } else {
             Err(Error::goal_state_not_loaded(slug))
         }
     }
+
+    pub fn disable_goal<S: AsRef<str>>(&self, slug: S) -> Result<()> {
+        if let Some(goal) = self.goals.get(slug.as_ref()) {
+            goal.disable();
+            self.save()?;
+            Ok(())
+        } else {
+            Err(Error::goal_state_not_loaded(slug))
+        }
+    }
+
+    fn add_goal_no_save(&mut self, goal_config: GoalConfig) -> Result<()> {
+        let slug = String::from(goal_config.slug());
+        let goal = Goal::new(goal_config, GoalState::default());
+        self.config.add_goal(RcCell::clone(&goal.config))?;
+        self.model
+            .goals
+            .insert(slug.clone(), RcCell::clone(&goal.state));
+        self.goals.insert(slug, goal);
+        Ok(())
+    }
+
+    fn update_goal_no_save(&self, goal_config: GoalConfig) -> Result<()> {
+        if let Some(goal) = self.goals.get(goal_config.slug()) {
+            let mut borrowed = goal.config.borrow_mut();
+            (*borrowed) += goal_config;
+            Ok(())
+        } else {
+            Err(Error::goal_not_found(goal_config.slug()))
+        }
+    }
+
+    fn upsert_goal(&mut self, goal_config: GoalConfig) {
+        if self.goals.contains_key(goal_config.slug()) {
+            self.update_goal_no_save(goal_config).unwrap()
+        } else {
+            self.add_goal_no_save(goal_config).unwrap()
+        }
+    }
+
+    pub fn add_goal(&mut self, goal: GoalConfig) -> Result<()> {
+        self.add_goal_no_save(goal)?;
+        self.save()?;
+        Ok(())
+    }
+
+    pub fn add_goals<I>(&mut self, goals: I) -> Result<()>
+    where
+        I: IntoIterator<Item = GoalConfig>,
+    {
+        goals
+            .into_iter()
+            .try_for_each(|g| self.add_goal_no_save(g))?;
+        self.save()?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
 pub struct Goal {
-    config: RefCell<GoalConfig>,
-    state: RefCell<GoalState>,
+    slug: String,
+    config: RcCell<GoalConfig>,
+    state: RcCell<GoalState>,
 }
 
 impl Goal {
+    pub(crate) fn new(config: GoalConfig, state: GoalState) -> Self {
+        Self {
+            slug: String::from(config.slug()),
+            config: RcCell::new(config),
+            state: RcCell::new(state),
+        }
+    }
+
     pub fn reset(&self) {
         self.state.borrow_mut().reset();
     }
@@ -162,5 +228,25 @@ impl Goal {
 
     pub fn choose(&self) {
         self.state.borrow_mut().choose();
+    }
+
+    pub fn slug(&self) -> &str {
+        &self.slug
+    }
+
+    /// Returns `true` if the goal can be chosen today.
+    pub fn choosable(&self, state: &State) -> bool {
+        let goal_config = self.config.borrow();
+        let goal_state = self.state.borrow();
+        if state.model.todays_goals.contains(&self.slug)
+            || goal_config.disabled == DisabledOptions::Disabled
+        {
+            false
+        } else if let DisabledOptions::Until(ref until) = goal_config.disabled {
+            //let cutoff
+            todo!()
+        } else {
+            true
+        }
     }
 }

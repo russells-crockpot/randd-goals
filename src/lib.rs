@@ -13,6 +13,7 @@ pub mod commands;
 pub(crate) mod error;
 pub use error::{Error, Result};
 pub mod util;
+pub use util::RcCell;
 
 lazy_static! {
     pub static ref CONFIG_FILE_PATH: Utf8PathBuf = {

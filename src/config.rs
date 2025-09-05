@@ -1,25 +1,40 @@
-use crate::{CONFIG_FILE_PATH, Error, Result, State};
+use crate::{
+    CONFIG_FILE_PATH, Error, RcCell, Result, State,
+    util::{LOCAL_OFFSET, now, now_with_cutoff, today},
+};
 use derive_builder::Builder;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
+    cell::OnceCell,
     collections::HashMap,
     fs::{self, OpenOptions},
+    ops::AddAssign,
 };
 use strum::EnumIs;
-use time::{Date, Duration, PrimitiveDateTime};
-use time::{Time, macros::time};
+use time::{Date, Duration, OffsetDateTime, Time, UtcOffset, macros::time};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", default)]
+pub const DEFAULT_WEIGHT: f64 = 1.0;
+
+lazy_static! {
+    pub static ref DEFAULT_CUT_OFF: Time = time!(04:00);
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Getters)]
+#[serde(rename_all = "kebab-case")]
+#[getset(get = "pub")]
 pub struct Config {
     #[serde(default)]
-    pub goals: Vec<RefCell<GoalConfig>>,
+    goals: Vec<RcCell<GoalConfig>>,
+    cut_off: Time,
+    daily_goals: usize,
     #[serde(skip)]
-    goals_map: HashMap<String, RefCell<GoalConfig>>,
-    pub cut_off: Time,
-    pub daily_goals: usize,
+    #[getset(skip)]
+    // We want this to be a OnceCell just in case we pass the cut-off while running.
+    effective_date: OnceCell<Date>,
+    #[serde(skip)]
+    #[getset(skip)]
+    goals_map: HashMap<String, RcCell<GoalConfig>>,
 }
 
 impl Config {
@@ -41,39 +56,65 @@ impl Config {
         config.goals_map = config
             .goals
             .iter()
-            .map(|g| (g.borrow().slug.clone(), RefCell::clone(g)))
+            .map(|g| (g.borrow().slug.clone(), RcCell::clone(g)))
             .collect();
         Ok(config)
     }
 
-    pub(crate) fn add_goal(&mut self, goal: GoalConfig) -> RefCell<GoalConfig> {
-        let slug = goal.slug.clone();
-        let goal = RefCell::new(goal);
-        self.goals.push(RefCell::clone(&goal));
-        self.goals_map.insert(slug, RefCell::clone(&goal));
-        goal
+    pub(crate) fn add_goal(&mut self, goal: RcCell<GoalConfig>) -> Result<()> {
+        let slug = goal.borrow().slug.clone();
+        if self.contains_goal(&slug) {
+            Err(Error::goal_already_exists(slug))
+        } else {
+            self.goals.push(RcCell::clone(&goal));
+            self.goals_map.insert(slug, goal);
+            Ok(())
+        }
     }
 
-    pub fn get_goal<S: AsRef<str>>(&self, slug: S) -> Option<RefCell<GoalConfig>> {
+    #[inline]
+    pub fn contains_goal<S: AsRef<str>>(&self, slug: S) -> bool {
+        self.goals_map.contains_key(slug.as_ref())
+    }
+
+    //pub fn merge_goal(&mut self, goal:)
+
+    pub fn get_goal<S: AsRef<str>>(&self, slug: S) -> Option<RcCell<GoalConfig>> {
         self.goals_map.get(slug.as_ref()).cloned()
+    }
+
+    /// What today's date should be considered, taken the config's cut-off time.
+    pub fn today(&self) -> Date {
+        *self
+            .effective_date
+            .get_or_init(|| now_with_cutoff(self.cut_off))
+    }
+
+    pub fn date_with_cutoff(&self, date: Date) -> OffsetDateTime {
+        let offset = UtcOffset::current_local_offset().unwrap();
+        OffsetDateTime::new_in_offset(date, self.cut_off, offset)
     }
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self {
+        let config = Self {
             goals: Vec::new(),
             goals_map: HashMap::new(),
-            cut_off: time!(04:00),
+            cut_off: *DEFAULT_CUT_OFF,
+            effective_date: OnceCell::new(),
             daily_goals: 1,
-        }
+        };
+        // Populate what today is ASAP
+        let _ = config.today();
+        config
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, EnumIs)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, EnumIs, PartialEq)]
 pub enum DisabledOptions {
     For(Duration),
-    Until(PrimitiveDateTime),
+    Until(OffsetDateTime),
     //TODO (ser/de)serialize from bool
     Disabled,
     #[default]
@@ -92,9 +133,9 @@ impl From<bool> for DisabledOptions {
 #[getset(get = "pub")]
 pub struct GoalConfig {
     #[builder(default = "self.default_slug()")]
-    pub slug: String,
+    slug: String,
     pub goal: String,
-    #[builder(default = "1.0")]
+    #[builder(default = "DEFAULT_WEIGHT")]
     pub weight: f64,
     #[serde(skip_serializing_if = "DisabledOptions::is_enabled")]
     pub disabled: DisabledOptions,
@@ -106,6 +147,17 @@ impl GoalBuilder {
     fn default_slug(&self) -> String {
         slug::slugify(self.goal.as_ref().unwrap())
     }
+
+    pub fn tag<S: AsRef<str>>(&mut self, tag: S) -> &mut Self {
+        let tag = String::from(tag.as_ref());
+        self.tags = Some(if let Some(mut tags) = self.tags.take() {
+            tags.push(tag);
+            tags
+        } else {
+            vec![tag]
+        });
+        self
+    }
 }
 
 impl GoalConfig {
@@ -115,5 +167,56 @@ impl GoalConfig {
 
     pub fn disable(&mut self) {
         self.disabled = DisabledOptions::Disabled;
+    }
+
+    /// Takes the values from the `other` argument, and overrides the values in this struct as long
+    /// as the value in the other struct is not the default value. **Note**: the `slug` property is
+    /// never overwritten.
+    pub(crate) fn merge(&mut self, other: Self) {
+        if !other.goal.is_empty() {
+            self.goal = other.goal;
+        }
+        if other.weight != DEFAULT_WEIGHT {
+            self.weight = other.weight;
+        }
+        if other.disabled != DisabledOptions::Enabled {
+            self.disabled = other.disabled;
+        }
+        for tag in other.tags.into_iter() {
+            if !self.tags.contains(&tag) {
+                self.tags.push(tag);
+            }
+        }
+    }
+
+    pub fn update(&mut self, other: GoalBuilder) {
+        if let Some(goal) = other.goal {
+            self.goal = goal;
+        }
+        if let Some(weight) = other.weight {
+            self.weight = weight;
+        }
+        if let Some(disabled) = other.disabled {
+            self.disabled = disabled;
+        }
+        if let Some(tags) = other.tags {
+            for tag in tags.into_iter() {
+                if !self.tags.contains(&tag) {
+                    self.tags.push(tag);
+                }
+            }
+        }
+    }
+}
+
+impl AddAssign for GoalConfig {
+    fn add_assign(&mut self, other: Self) {
+        self.merge(other);
+    }
+}
+
+impl AddAssign<GoalBuilder> for GoalConfig {
+    fn add_assign(&mut self, other: GoalBuilder) {
+        self.update(other);
     }
 }
