@@ -25,16 +25,16 @@ lazy_static! {
 #[getset(get = "pub")]
 pub struct Config {
     #[serde(default)]
-    goals: Vec<RcCell<GoalConfig>>,
+    tasks: Vec<RcCell<TaskConfig>>,
     cut_off: Time,
-    daily_goals: usize,
+    daily_tasks: usize,
     #[serde(skip)]
     #[getset(skip)]
     // We want this to be a OnceCell just in case we pass the cut-off while running.
     effective_date: OnceCell<Date>,
     #[serde(skip)]
     #[getset(skip)]
-    goals_map: HashMap<String, RcCell<GoalConfig>>,
+    tasks_map: HashMap<String, RcCell<TaskConfig>>,
 }
 
 impl Config {
@@ -53,34 +53,34 @@ impl Config {
             config.save()?;
             config
         };
-        config.goals_map = config
-            .goals
+        config.tasks_map = config
+            .tasks
             .iter()
             .map(|g| (g.borrow().slug.clone(), RcCell::clone(g)))
             .collect();
         Ok(config)
     }
 
-    pub(crate) fn add_goal(&mut self, goal: RcCell<GoalConfig>) -> Result<()> {
-        let slug = goal.borrow().slug.clone();
-        if self.contains_goal(&slug) {
-            Err(Error::goal_already_exists(slug))
+    pub(crate) fn add_task(&mut self, task: RcCell<TaskConfig>) -> Result<()> {
+        let slug = task.borrow().slug.clone();
+        if self.contains_task(&slug) {
+            Err(Error::task_already_exists(slug))
         } else {
-            self.goals.push(RcCell::clone(&goal));
-            self.goals_map.insert(slug, goal);
+            self.tasks.push(RcCell::clone(&task));
+            self.tasks_map.insert(slug, task);
             Ok(())
         }
     }
 
     #[inline]
-    pub fn contains_goal<S: AsRef<str>>(&self, slug: S) -> bool {
-        self.goals_map.contains_key(slug.as_ref())
+    pub fn contains_task<S: AsRef<str>>(&self, slug: S) -> bool {
+        self.tasks_map.contains_key(slug.as_ref())
     }
 
-    //pub fn merge_goal(&mut self, goal:)
+    //pub fn merge_task(&mut self, task:)
 
-    pub fn get_goal<S: AsRef<str>>(&self, slug: S) -> Option<RcCell<GoalConfig>> {
-        self.goals_map.get(slug.as_ref()).cloned()
+    pub fn get_task<S: AsRef<str>>(&self, slug: S) -> Option<RcCell<TaskConfig>> {
+        self.tasks_map.get(slug.as_ref()).cloned()
     }
 
     /// What today's date should be considered, taken the config's cut-off time.
@@ -99,11 +99,11 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         let config = Self {
-            goals: Vec::new(),
-            goals_map: HashMap::new(),
+            tasks: Vec::new(),
+            tasks_map: HashMap::new(),
             cut_off: *DEFAULT_CUT_OFF,
             effective_date: OnceCell::new(),
-            daily_goals: 1,
+            daily_tasks: 1,
         };
         // Populate what today is ASAP
         let _ = config.today();
@@ -129,12 +129,12 @@ impl From<bool> for DisabledOptions {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Builder, Getters)]
 #[serde(rename_all = "kebab-case")]
-#[builder(name = "GoalBuilder")]
+#[builder(name = "TaskBuilder")]
 #[getset(get = "pub")]
-pub struct GoalConfig {
+pub struct TaskConfig {
     #[builder(default = "self.default_slug()")]
     slug: String,
-    pub goal: String,
+    pub task: String,
     #[builder(default = "DEFAULT_WEIGHT")]
     pub weight: f64,
     #[serde(skip_serializing_if = "DisabledOptions::is_enabled")]
@@ -143,9 +143,9 @@ pub struct GoalConfig {
     pub tags: Vec<String>,
 }
 
-impl GoalBuilder {
+impl TaskBuilder {
     fn default_slug(&self) -> String {
-        slug::slugify(self.goal.as_ref().unwrap())
+        slug::slugify(self.task.as_ref().unwrap())
     }
 
     pub fn tag<S: AsRef<str>>(&mut self, tag: S) -> &mut Self {
@@ -160,7 +160,7 @@ impl GoalBuilder {
     }
 }
 
-impl GoalConfig {
+impl TaskConfig {
     pub fn enable(&mut self) {
         self.disabled = DisabledOptions::Enabled;
     }
@@ -173,8 +173,8 @@ impl GoalConfig {
     /// as the value in the other struct is not the default value. **Note**: the `slug` property is
     /// never overwritten.
     pub(crate) fn merge(&mut self, other: Self) {
-        if !other.goal.is_empty() {
-            self.goal = other.goal;
+        if !other.task.is_empty() {
+            self.task = other.task;
         }
         if other.weight != DEFAULT_WEIGHT {
             self.weight = other.weight;
@@ -189,9 +189,9 @@ impl GoalConfig {
         }
     }
 
-    pub fn update(&mut self, other: GoalBuilder) {
-        if let Some(goal) = other.goal {
-            self.goal = goal;
+    pub fn update(&mut self, other: TaskBuilder) {
+        if let Some(task) = other.task {
+            self.task = task;
         }
         if let Some(weight) = other.weight {
             self.weight = weight;
@@ -209,14 +209,14 @@ impl GoalConfig {
     }
 }
 
-impl AddAssign for GoalConfig {
+impl AddAssign for TaskConfig {
     fn add_assign(&mut self, other: Self) {
         self.merge(other);
     }
 }
 
-impl AddAssign<GoalBuilder> for GoalConfig {
-    fn add_assign(&mut self, other: GoalBuilder) {
+impl AddAssign<TaskBuilder> for TaskConfig {
+    fn add_assign(&mut self, other: TaskBuilder) {
         self.update(other);
     }
 }

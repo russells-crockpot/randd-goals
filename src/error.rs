@@ -28,12 +28,12 @@ pub enum Error {
         source: IndeterminateOffsetError,
         backtrace: Backtrace,
     },
-    #[snafu(display("A goal named '{slug}' already exists."))]
-    GoalAlreadyExists { slug: String, backtrace: Backtrace },
-    #[snafu(display("No goal named '{slug}' was found."))]
-    GoalNotFound { slug: String, backtrace: Backtrace },
-    #[snafu(display("The current state for the {slug} goal has not be loaded."))]
-    GoalStateNotLoaded { slug: String, backtrace: Backtrace },
+    #[snafu(display("A task named '{slug}' already exists."))]
+    TaskAlreadyExists { slug: String, backtrace: Backtrace },
+    #[snafu(display("No task named '{slug}' was found."))]
+    TaskNotFound { slug: String, backtrace: Backtrace },
+    #[snafu(display("The current state for the {slug} task has not be loaded."))]
+    TaskStateNotLoaded { slug: String, backtrace: Backtrace },
     #[snafu(display("{message}"))]
     Other {
         message: String,
@@ -48,9 +48,9 @@ impl Error {
             Self::FromUtf8 { backtrace, .. } => backtrace,
             Self::Yaml { backtrace, .. } => backtrace,
             Self::NonUtf8Path { backtrace, .. } => backtrace,
-            Self::GoalStateNotLoaded { backtrace, .. } => backtrace,
-            Self::GoalNotFound { backtrace, .. } => backtrace,
-            Self::GoalAlreadyExists { backtrace, .. } => backtrace,
+            Self::TaskStateNotLoaded { backtrace, .. } => backtrace,
+            Self::TaskNotFound { backtrace, .. } => backtrace,
+            Self::TaskAlreadyExists { backtrace, .. } => backtrace,
             Self::IndeterminateOffset { backtrace, .. } => backtrace,
             Self::Other { backtrace, .. } => backtrace,
         }
@@ -65,24 +65,24 @@ impl Error {
     }
 
     #[inline(always)]
-    pub(crate) fn goal_not_found<S: AsRef<str>>(slug: S) -> Self {
-        Self::GoalNotFound {
+    pub(crate) fn task_not_found<S: AsRef<str>>(slug: S) -> Self {
+        Self::TaskNotFound {
             slug: String::from(slug.as_ref()),
             backtrace: Backtrace::capture(),
         }
     }
 
     #[inline(always)]
-    pub(crate) fn goal_already_exists<S: AsRef<str>>(slug: S) -> Self {
-        Self::GoalAlreadyExists {
+    pub(crate) fn task_already_exists<S: AsRef<str>>(slug: S) -> Self {
+        Self::TaskAlreadyExists {
             slug: String::from(slug.as_ref()),
             backtrace: Backtrace::capture(),
         }
     }
 
     #[inline(always)]
-    pub(crate) fn goal_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
-        Self::GoalStateNotLoaded {
+    pub(crate) fn task_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
+        Self::TaskStateNotLoaded {
             slug: String::from(slug.as_ref()),
             backtrace: Backtrace::capture(),
         }

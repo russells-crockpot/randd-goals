@@ -1,6 +1,6 @@
 use crate::{
     Error, RcCell, Result, STATE_FILE_PATH,
-    config::{Config, DisabledOptions, GoalConfig},
+    config::{Config, DisabledOptions, TaskConfig},
     util::{now, today},
 };
 use getset::Getters;
@@ -16,16 +16,16 @@ use time::{Date, Duration, OffsetDateTime};
 #[serde(default)]
 pub struct StateModel {
     pub last_generated: OffsetDateTime,
-    pub goals: HashMap<String, RcCell<GoalState>>,
-    pub todays_goals: Vec<String>,
+    pub tasks: HashMap<String, RcCell<TaskState>>,
+    pub todays_tasks: Vec<String>,
 }
 
 impl Default for StateModel {
     fn default() -> Self {
         StateModel {
             last_generated: now() - Duration::DAY,
-            goals: HashMap::new(),
-            todays_goals: Vec::new(),
+            tasks: HashMap::new(),
+            todays_tasks: Vec::new(),
         }
     }
 }
@@ -50,7 +50,7 @@ impl StateModel {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct GoalState {
+pub struct TaskState {
     #[serde(skip_serializing_if = "std::option::Option::is_none")]
     pub disabled_at: Option<OffsetDateTime>,
     #[serde(skip_serializing_if = "std::option::Option::is_none")]
@@ -58,7 +58,7 @@ pub struct GoalState {
     pub completed: bool,
 }
 
-impl GoalState {
+impl TaskState {
     pub fn reset(&mut self) {
         self.completed = false;
     }
@@ -85,7 +85,7 @@ impl GoalState {
 pub struct State {
     config: Config,
     model: StateModel,
-    goals: HashMap<String, Goal>,
+    tasks: HashMap<String, Task>,
 }
 
 impl State {
@@ -98,15 +98,15 @@ impl State {
             StateModel::default()
         };
         let mut orphans = Vec::new();
-        let mut goals = HashMap::new();
-        for (slug, goal_state) in model.goals.iter() {
-            if let Some(goal_cfg) = config.get_goal(slug) {
-                let goal = Goal {
+        let mut tasks = HashMap::new();
+        for (slug, task_state) in model.tasks.iter() {
+            if let Some(task_cfg) = config.get_task(slug) {
+                let task = Task {
                     slug: slug.clone(),
-                    config: goal_cfg,
-                    state: RcCell::clone(goal_state),
+                    config: task_cfg,
+                    state: RcCell::clone(task_state),
                 };
-                goals.insert(slug.clone(), goal);
+                tasks.insert(slug.clone(), task);
             } else {
                 orphans.push(String::from(slug));
             }
@@ -115,7 +115,7 @@ impl State {
         Ok(Self {
             config,
             model,
-            goals,
+            tasks,
         })
     }
 
@@ -125,82 +125,82 @@ impl State {
         Ok(())
     }
 
-    pub fn enable_goal<S: AsRef<str>>(&self, slug: S) -> Result<()> {
-        if let Some(goal) = self.goals.get(slug.as_ref()) {
-            goal.enable();
+    pub fn enable_task<S: AsRef<str>>(&self, slug: S) -> Result<()> {
+        if let Some(task) = self.tasks.get(slug.as_ref()) {
+            task.enable();
             self.save()?;
             Ok(())
         } else {
-            Err(Error::goal_state_not_loaded(slug))
+            Err(Error::task_state_not_loaded(slug))
         }
     }
 
-    pub fn disable_goal<S: AsRef<str>>(&self, slug: S) -> Result<()> {
-        if let Some(goal) = self.goals.get(slug.as_ref()) {
-            goal.disable();
+    pub fn disable_task<S: AsRef<str>>(&self, slug: S) -> Result<()> {
+        if let Some(task) = self.tasks.get(slug.as_ref()) {
+            task.disable();
             self.save()?;
             Ok(())
         } else {
-            Err(Error::goal_state_not_loaded(slug))
+            Err(Error::task_state_not_loaded(slug))
         }
     }
 
-    fn add_goal_no_save(&mut self, goal_config: GoalConfig) -> Result<()> {
-        let slug = String::from(goal_config.slug());
-        let goal = Goal::new(goal_config, GoalState::default());
-        self.config.add_goal(RcCell::clone(&goal.config))?;
+    fn add_task_no_save(&mut self, task_config: TaskConfig) -> Result<()> {
+        let slug = String::from(task_config.slug());
+        let task = Task::new(task_config, TaskState::default());
+        self.config.add_task(RcCell::clone(&task.config))?;
         self.model
-            .goals
-            .insert(slug.clone(), RcCell::clone(&goal.state));
-        self.goals.insert(slug, goal);
+            .tasks
+            .insert(slug.clone(), RcCell::clone(&task.state));
+        self.tasks.insert(slug, task);
         Ok(())
     }
 
-    fn update_goal_no_save(&self, goal_config: GoalConfig) -> Result<()> {
-        if let Some(goal) = self.goals.get(goal_config.slug()) {
-            let mut borrowed = goal.config.borrow_mut();
-            (*borrowed) += goal_config;
+    fn update_task_no_save(&self, task_config: TaskConfig) -> Result<()> {
+        if let Some(task) = self.tasks.get(task_config.slug()) {
+            let mut borrowed = task.config.borrow_mut();
+            (*borrowed) += task_config;
             Ok(())
         } else {
-            Err(Error::goal_not_found(goal_config.slug()))
+            Err(Error::task_not_found(task_config.slug()))
         }
     }
 
-    fn upsert_goal(&mut self, goal_config: GoalConfig) {
-        if self.goals.contains_key(goal_config.slug()) {
-            self.update_goal_no_save(goal_config).unwrap()
+    fn upsert_task(&mut self, task_config: TaskConfig) {
+        if self.tasks.contains_key(task_config.slug()) {
+            self.update_task_no_save(task_config).unwrap()
         } else {
-            self.add_goal_no_save(goal_config).unwrap()
+            self.add_task_no_save(task_config).unwrap()
         }
     }
 
-    pub fn add_goal(&mut self, goal: GoalConfig) -> Result<()> {
-        self.add_goal_no_save(goal)?;
+    pub fn add_task(&mut self, task: TaskConfig) -> Result<()> {
+        self.add_task_no_save(task)?;
         self.save()?;
         Ok(())
     }
 
-    pub fn add_goals<I>(&mut self, goals: I) -> Result<()>
+    pub fn add_tasks<I>(&mut self, tasks: I) -> Result<()>
     where
-        I: IntoIterator<Item = GoalConfig>,
+        I: IntoIterator<Item = TaskConfig>,
     {
-        goals
+        tasks
             .into_iter()
-            .try_for_each(|g| self.add_goal_no_save(g))?;
+            .try_for_each(|g| self.add_task_no_save(g))?;
         self.save()?;
         Ok(())
     }
 }
 
 #[derive(Debug)]
-pub struct Goal {
+pub struct Task {
     slug: String,
-    config: RcCell<GoalConfig>,
-    state: RcCell<GoalState>,
+    config: RcCell<TaskConfig>,
+    state: RcCell<TaskState>,
 }
 
-impl Goal {
-    pub(crate) fn new(config: GoalConfig, state: GoalState) -> Self {
+impl Task {
+    pub(crate) fn new(config: TaskConfig, state: TaskState) -> Self {
         Self {
             slug: String::from(config.slug()),
             config: RcCell::new(config),
@@ -234,15 +234,15 @@ impl Goal {
         &self.slug
     }
 
-    /// Returns `true` if the goal can be chosen today.
+    /// Returns `true` if the task can be chosen today.
     pub fn choosable(&self, state: &State) -> bool {
-        let goal_config = self.config.borrow();
-        let goal_state = self.state.borrow();
-        if state.model.todays_goals.contains(&self.slug)
-            || goal_config.disabled == DisabledOptions::Disabled
+        let task_config = self.config.borrow();
+        let task_state = self.state.borrow();
+        if state.model.todays_tasks.contains(&self.slug)
+            || task_config.disabled == DisabledOptions::Disabled
         {
             false
-        } else if let DisabledOptions::Until(ref until) = goal_config.disabled {
+        } else if let DisabledOptions::Until(ref until) = task_config.disabled {
             //let cutoff
             todo!()
         } else {

@@ -34,8 +34,8 @@ pub fn now_with_cutoff(cut_off: Time) -> Date {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, Default)]
 /// A new type that wraps a `Rc<RefCell<V>>`. This is _super_ useful in our case because we're
 /// often referring to the same object across different objects (mostly because our state has a
-/// state model, a config, and a list of goals, each of which have a reference to the _goal's_
-/// state and config). We use this so that when we alter the desire goal or state in one place, it
+/// state model, a config, and a list of tasks, each of which have a reference to the _task's_
+/// state and config). We use this so that when we alter the desire task or state in one place, it
 /// alters it in all places so that we don't have to keep track of every place we need to update
 /// it.
 pub struct RcCell<V>(Rc<RefCell<V>>);
