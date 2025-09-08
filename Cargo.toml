@@ -10,9 +10,11 @@ clap_complete = { version = "4.5.57", features = ["unstable-doc"] }
 color-eyre = { version = "0.6.5", features = ["color-spantrace", "tracing-error"] }
 derive_builder = { version = "0.20.2", features = ["clippy"] }
 dirs = "6.0.0"
+file-rotate = "0.8.0"
 getset = "0.1.6"
 lazy_static = "1.5.0"
 notify = { version = "8.2.0", features = ["serde"] }
+notify-rust = { version = "4.11.7", optional = true }
 paste = "1.0.15"
 rand = "0.9.2"
 serde = { version = "1.0.219", features = ["derive", "rc"] }
@@ -30,3 +32,11 @@ unused_imports = "allow"
 unused_macros = "allow"
 unused_mut = "allow"
 unused_variables = "allow"
+
+[dev-dependencies]
+drop_bomb = "0.1.5"
+mockall = "0.13.1"
+pretty_assertions = "1.4.1"
+
+[features]
+notifications = ["dep:notify-rust"]
