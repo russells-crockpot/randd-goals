@@ -2,13 +2,14 @@ use super::ExecutableCommand;
 use crate::{
     Error, Result, State,
     config::TaskBuilder,
-    state::{Task, TaskInfo},
+    task::{Task, TaskInfo},
 };
-use clap::{Args, Parser, Subcommand};
+use clap::Parser;
 use cli_table::{Cell, Table};
 use std::{collections::BTreeMap, io};
 
 #[derive(Debug, Parser)]
+#[command(rename_all = "kebab")]
 pub enum TaskCommands {
     Add(AddTaskCommand),
     Upsert(UpsertTaskCommand),
@@ -19,6 +20,7 @@ pub enum TaskCommands {
     Details(TaskDetailsCommand),
     Enable(EnableTaskCommand),
     Disable(DisableTaskCommand),
+    Complete(CompleteTaskCommand),
 }
 
 fn list_tasks(state: State) -> Result<()> {
@@ -44,6 +46,7 @@ impl ExecutableCommand for TaskCommands {
             Self::Enable(cmd) => cmd.execute(state),
             Self::Disable(cmd) => cmd.execute(state),
             Self::Remove(cmd) => cmd.execute(state),
+            Self::Complete(cmd) => cmd.execute(state),
         }
     }
 }
@@ -195,7 +198,8 @@ pub struct EnableTaskCommand {
 
 impl ExecutableCommand for EnableTaskCommand {
     fn execute(self, mut state: State) -> Result<()> {
-        state.enable_tasks(self.tasks)
+        state.enable_tasks(self.tasks)?;
+        state.save()
     }
 }
 
@@ -208,7 +212,8 @@ pub struct DisableTaskCommand {
 
 impl ExecutableCommand for DisableTaskCommand {
     fn execute(self, mut state: State) -> Result<()> {
-        state.disable_tasks(self.tasks)
+        state.disable_tasks(self.tasks)?;
+        state.save()
     }
 }
 
@@ -246,6 +251,25 @@ pub struct RemoveTaskCommand {
 
 impl ExecutableCommand for RemoveTaskCommand {
     fn execute(self, mut state: State) -> Result<()> {
-        state.remove_tasks(self.tasks)
+        state.remove_tasks(self.tasks)?;
+        state.save()
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct CompleteTaskCommand {
+    #[arg()]
+    pub tasks: Vec<String>,
+}
+
+impl ExecutableCommand for CompleteTaskCommand {
+    fn execute(self, mut state: State) -> Result<()> {
+        self.tasks.into_iter().try_for_each(|slug| {
+            state
+                .get_task(&slug)
+                .ok_or_else(|| Error::task_not_found(&slug))
+                .map(|task| task.complete())
+        })?;
+        state.save()
     }
 }

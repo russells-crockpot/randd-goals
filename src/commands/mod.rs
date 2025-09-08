@@ -1,9 +1,11 @@
 use crate::{Result, State};
-use clap::{Args, Parser, Subcommand};
+use clap::Parser;
 
 pub mod config;
 pub mod tasks;
 use tasks::TaskCommands;
+pub mod today;
+pub use today::TodayCommands;
 
 #[derive(Debug, Parser)]
 #[command(version, author)]
@@ -29,7 +31,9 @@ impl Default for Cli {
 #[derive(Debug, Parser)]
 pub enum Commands {
     #[command(subcommand)]
-    Tasks(tasks::TaskCommands),
+    Tasks(TaskCommands),
+    #[command(subcommand)]
+    Today(TodayCommands),
 }
 
 pub trait ExecutableCommand {
@@ -40,6 +44,7 @@ impl ExecutableCommand for Commands {
     fn execute(self, state: State) -> Result<()> {
         match self {
             Self::Tasks(cmd) => cmd.execute(state),
+            Self::Today(cmd) => cmd.execute(state),
         }
     }
 }

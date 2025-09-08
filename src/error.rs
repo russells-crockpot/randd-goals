@@ -1,6 +1,7 @@
 use crate::config::TaskBuilderError;
 use camino::FromPathBufError;
 use paste::paste;
+use rand::distr::weighted::Error as RandWeightError;
 use serde_yml::Error as YamlError;
 use snafu::{AsBacktrace, Backtrace, Snafu};
 use std::{io::Error as IoError, result::Result as BaseResult, string::FromUtf8Error};
@@ -11,6 +12,10 @@ use time::error::IndeterminateOffset as IndeterminateOffsetError;
 pub enum Error {
     Io {
         source: IoError,
+        backtrace: Backtrace,
+    },
+    RandWeight {
+        source: RandWeightError,
         backtrace: Backtrace,
     },
     TaskBuilder {
@@ -50,6 +55,7 @@ impl Error {
     pub fn backtrace(&self) -> &Backtrace {
         match self {
             Self::Io { backtrace, .. } => backtrace,
+            Self::RandWeight { backtrace, .. } => backtrace,
             Self::TaskBuilder { backtrace, .. } => backtrace,
             Self::FromUtf8 { backtrace, .. } => backtrace,
             Self::Yaml { backtrace, .. } => backtrace,
@@ -126,6 +132,7 @@ macro_rules! impl_from {
 
 impl_from! {FromPathBufError, NonUtf8Path}
 impl_from! {Io}
+impl_from! {RandWeight}
 impl_from! {FromUtf8}
 impl_from! {Yaml}
 impl_from! {IndeterminateOffset}

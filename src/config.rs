@@ -81,8 +81,6 @@ impl Config {
         self.tasks_map.contains_key(slug.as_ref())
     }
 
-    //pub fn merge_task(&mut self, task:)
-
     pub fn get_task<S: AsRef<str>>(&self, slug: S) -> Option<RcCell<TaskConfig>> {
         self.tasks_map.get(slug.as_ref()).cloned()
     }
