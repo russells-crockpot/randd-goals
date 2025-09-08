@@ -1,15 +1,17 @@
 [package]
-name = "randd-goals"
+name = "randd-tasks"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+backtrace = "0.3.75"
 camino = "1.1.12"
-clap = { version = "4.5.46", features = ["derive", "unicode", "wrap_help", "cargo", "unstable-doc"] }
+clap = { version = "4.5.47", features = ["derive", "unicode", "wrap_help", "cargo", "unstable-doc"] }
 clap_complete = { version = "4.5.57", features = ["unstable-doc"] }
-color-eyre = { version = "0.6.5", features = ["color-spantrace", "tracing-error"] }
+color-backtrace = "0.7.1"
 derive_builder = { version = "0.20.2", features = ["clippy"] }
 dirs = "6.0.0"
+dotenv = "0.15.0"
 file-rotate = "0.8.0"
 getset = "0.1.6"
 lazy_static = "1.5.0"
@@ -22,9 +24,9 @@ serde-jsonlines = "0.7.0"
 serde_path_to_error = "0.1.17"
 serde_yml = "0.0.12"
 slug = "0.1.6"
-snafu = { version = "0.8.8", default-features = false, features = ["std", "rust_1_81", "guide", "backtrace", "futures"] }
+snafu = { version = "0.8.9", default-features = false, features = ["std", "rust_1_81", "guide", "backtrace", "futures", "backtraces-impl-backtrace-crate"] }
 strum = { version = "0.27.2", features = ["derive"] }
-time = { version = "0.3.42", features = ["macros", "serde-human-readable", "rand", "local-offset", "formatting"] }
+time = { version = "0.3.43", features = ["macros", "serde-human-readable", "rand", "local-offset", "formatting"] }
 
 [lints.rust]
 dead_code = "allow"
