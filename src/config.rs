@@ -39,7 +39,11 @@ pub struct Config {
 
 impl Config {
     pub fn save(&self) -> Result<()> {
-        let file = OpenOptions::new().write(true).open(&*CONFIG_FILE_PATH)?;
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&*CONFIG_FILE_PATH)?;
         serde_yml::to_writer(file, self)?;
         Ok(())
     }
@@ -135,8 +139,11 @@ pub struct TaskConfig {
     #[builder(default = "self.default_slug()")]
     slug: String,
     pub task: String,
+    #[builder(default)]
+    pub details: Option<String>,
     #[builder(default = "DEFAULT_WEIGHT")]
     pub weight: f64,
+    #[builder(default)]
     #[serde(skip_serializing_if = "DisabledOptions::is_enabled")]
     pub disabled: DisabledOptions,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]

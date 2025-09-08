@@ -1,5 +1,5 @@
 use crate::{
-    Error, RcCell, Result, STATE_FILE_PATH,
+    Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH,
     config::{Config, DisabledOptions, TaskConfig},
     util::{now, today},
 };
@@ -7,7 +7,7 @@ use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    fs::{self, OpenOptions},
+    fs::{self, DirBuilder, OpenOptions},
 };
 use time::{Date, Duration, OffsetDateTime};
 
@@ -43,7 +43,12 @@ impl StateModel {
     }
 
     pub fn save(&self) -> Result<()> {
-        let file = OpenOptions::new().write(true).open(&*STATE_FILE_PATH)?;
+        DirBuilder::new().recursive(true).create(&*STATE_DIR)?;
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&*STATE_FILE_PATH)?;
         serde_yml::to_writer(file, self).map_err(|e| e.into())
     }
 }

@@ -1,7 +1,8 @@
+use crate::config::TaskBuilderError;
 use camino::FromPathBufError;
 use paste::paste;
 use serde_yml::Error as YamlError;
-use snafu::{Backtrace, Snafu};
+use snafu::{AsBacktrace, Backtrace, Snafu};
 use std::{io::Error as IoError, result::Result as BaseResult, string::FromUtf8Error};
 use time::error::IndeterminateOffset as IndeterminateOffsetError;
 
@@ -10,6 +11,10 @@ use time::error::IndeterminateOffset as IndeterminateOffsetError;
 pub enum Error {
     Io {
         source: IoError,
+        backtrace: Backtrace,
+    },
+    TaskBuilder {
+        source: TaskBuilderError,
         backtrace: Backtrace,
     },
     FromUtf8 {
@@ -45,6 +50,7 @@ impl Error {
     pub fn backtrace(&self) -> &Backtrace {
         match self {
             Self::Io { backtrace, .. } => backtrace,
+            Self::TaskBuilder { backtrace, .. } => backtrace,
             Self::FromUtf8 { backtrace, .. } => backtrace,
             Self::Yaml { backtrace, .. } => backtrace,
             Self::NonUtf8Path { backtrace, .. } => backtrace,
@@ -60,7 +66,7 @@ impl Error {
     pub(crate) fn simple<S: AsRef<str>>(message: S) -> Self {
         Self::Other {
             message: String::from(message.as_ref()),
-            backtrace: Backtrace::capture(),
+            backtrace: Backtrace::new(),
         }
     }
 
@@ -68,7 +74,7 @@ impl Error {
     pub(crate) fn task_not_found<S: AsRef<str>>(slug: S) -> Self {
         Self::TaskNotFound {
             slug: String::from(slug.as_ref()),
-            backtrace: Backtrace::capture(),
+            backtrace: Backtrace::new(),
         }
     }
 
@@ -76,7 +82,7 @@ impl Error {
     pub(crate) fn task_already_exists<S: AsRef<str>>(slug: S) -> Self {
         Self::TaskAlreadyExists {
             slug: String::from(slug.as_ref()),
-            backtrace: Backtrace::capture(),
+            backtrace: Backtrace::new(),
         }
     }
 
@@ -84,8 +90,14 @@ impl Error {
     pub(crate) fn task_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
         Self::TaskStateNotLoaded {
             slug: String::from(slug.as_ref()),
-            backtrace: Backtrace::capture(),
+            backtrace: Backtrace::new(),
         }
+    }
+}
+
+impl AsBacktrace for Error {
+    fn as_backtrace(&self) -> Option<&Backtrace> {
+        Some(self.backtrace())
     }
 }
 
@@ -96,7 +108,8 @@ macro_rules! impl_from {
             fn from(error: $type) -> Self {
                 Self::$error {
                     source: error,
-                    backtrace: Backtrace::capture(),
+                    backtrace: Backtrace::new(),
+                    //backtrace: Backtrace::capture(),
                 }
             }
         }
@@ -116,5 +129,6 @@ impl_from! {Io}
 impl_from! {FromUtf8}
 impl_from! {Yaml}
 impl_from! {IndeterminateOffset}
+impl_from! {TaskBuilder}
 
-pub type Result<V> = BaseResult<V, Error>;
+pub type Result<V, E = Error> = BaseResult<V, E>;
