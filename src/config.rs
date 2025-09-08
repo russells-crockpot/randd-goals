@@ -140,13 +140,14 @@ pub struct TaskConfig {
     slug: String,
     pub task: String,
     #[builder(default)]
-    pub details: Option<String>,
+    #[serde(default, skip_serializing_if = "std::option::Option::is_none")]
+    pub description: Option<String>,
     #[builder(default = "DEFAULT_WEIGHT")]
     pub weight: f64,
     #[builder(default)]
-    #[serde(skip_serializing_if = "DisabledOptions::is_enabled")]
+    #[serde(default, skip_serializing_if = "DisabledOptions::is_enabled")]
     pub disabled: DisabledOptions,
-    #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
     pub tags: Vec<String>,
 }
 
