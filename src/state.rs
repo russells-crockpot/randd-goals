@@ -1,7 +1,7 @@
 use crate::{
     Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH, Task,
     config::{Config, DisabledOptions, TaskConfig},
-    util::{now, today},
+    util::{TaskSet, dt_with_cutoff, now, today},
 };
 use getset::Getters;
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ use time::{Date, Duration, OffsetDateTime, Time};
 pub struct StateModel {
     pub last_generated: OffsetDateTime,
     pub tasks: HashMap<String, RcCell<TaskState>>,
-    pub todays_tasks: Vec<String>,
+    pub todays_tasks: TaskSet,
 }
 
 impl Default for StateModel {
@@ -25,7 +25,7 @@ impl Default for StateModel {
         StateModel {
             last_generated: now() - Duration::DAY,
             tasks: HashMap::new(),
-            todays_tasks: Vec::new(),
+            todays_tasks: TaskSet::new(),
         }
     }
 }
@@ -247,29 +247,24 @@ impl State {
     }
 
     #[inline]
-    pub fn todays_tasks(&self) -> &[String] {
-        self.model.todays_tasks.as_ref()
-    }
-
-    pub fn set_todays_tasks<I, S>(&mut self, slugs: I)
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        self.model.todays_tasks = slugs
-            .into_iter()
-            .map(|s| String::from(s.as_ref()))
-            .collect()
+    pub fn todays_tasks(&self) -> &TaskSet {
+        &self.model.todays_tasks
     }
 
     #[inline]
-    pub fn clear_todays_tasks<I, S>(&mut self) {
-        self.model.todays_tasks = Vec::new()
+    pub fn todays_tasks_mut(&mut self) -> &mut TaskSet {
+        &mut self.model.todays_tasks
     }
 
     #[inline]
     pub fn last_generated(&self) -> &OffsetDateTime {
         &self.model.last_generated
+    }
+
+    /// Returns the generated date, with the configured cut-off taken into account.
+    #[inline]
+    pub fn last_generated_date(&self) -> Date {
+        dt_with_cutoff(&self.model.last_generated, self.cut_off())
     }
 
     #[inline]
@@ -296,7 +291,7 @@ impl State {
     }
 
     #[inline]
-    pub fn today(&self) -> Date {
+    pub fn todays_date(&self) -> Date {
         self.config.today()
     }
 }

@@ -15,5 +15,15 @@ pub fn pick_tasks(num_tasks: usize, state: &State) -> Result<Vec<String>> {
 }
 
 pub fn pick_todays_tasks(state: &mut State) -> Result<()> {
-    todo!()
+    let num_tasks_to_generate = if state.last_generated_date() > state.todays_date() {
+        state.todays_tasks_mut().clear();
+        state.todays_tasks().len()
+    } else {
+        state.daily_tasks() - state.todays_tasks().len()
+    };
+    if num_tasks_to_generate > 0 {
+        let new_tasks = pick_tasks(num_tasks_to_generate, state)?;
+        state.todays_tasks_mut().extend(new_tasks);
+    }
+    Ok(())
 }
