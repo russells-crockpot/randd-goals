@@ -1,9 +1,9 @@
 use crate::{
-    Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH, Task,
-    config::{Config, DisabledOptions, TaskConfig},
-    util::{TaskSet, dt_with_cutoff, now, today},
+    Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH,
+    config::Config,
+    task::{Task, TaskConfig, TaskSet, TaskState},
+    util::{dt_with_cutoff, now},
 };
-use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -50,39 +50,6 @@ impl StateModel {
             .write(true)
             .open(&*STATE_FILE_PATH)?;
         serde_yml::to_writer(file, self).map_err(|e| e.into())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct TaskState {
-    #[serde(skip_serializing_if = "std::option::Option::is_none")]
-    pub disabled_at: Option<OffsetDateTime>,
-    #[serde(skip_serializing_if = "std::option::Option::is_none")]
-    pub last_chosen: Option<Date>,
-    pub completed: bool,
-}
-
-impl TaskState {
-    pub fn reset(&mut self) {
-        self.completed = false;
-    }
-
-    pub fn complete(&mut self) {
-        self.completed = true;
-    }
-
-    pub fn enable(&mut self) {
-        self.disabled_at = None;
-    }
-
-    pub fn disable(&mut self) {
-        self.disabled_at = Some(now());
-    }
-
-    pub fn choose(&mut self) {
-        self.reset();
-        self.last_chosen = Some(today());
     }
 }
 
@@ -228,12 +195,11 @@ impl State {
         }
     }
 
-    pub fn upsert_tasks<I>(&mut self, tasks: I) -> Result<()>
+    pub fn upsert_tasks<I>(&mut self, tasks: I)
     where
         I: IntoIterator<Item = TaskConfig>,
     {
         tasks.into_iter().for_each(|t| self.upsert_task(t));
-        Ok(())
     }
 
     #[inline]

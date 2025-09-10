@@ -3,6 +3,7 @@ use randd_tasks::{Cli, Result, State};
 
 fn main() -> Result<()> {
     dotenv::dotenv().ok();
+    pretty_env_logger::init();
     color_backtrace::install();
     //color_eyre::install()?;
     let cli = Cli::default();

@@ -1,16 +1,15 @@
-use crate::{
-    Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH,
-    config::{Config, DisabledOptions, TaskConfig},
-    state::{State, TaskState},
-    util::{now, today},
-};
-use getset::Getters;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fs::{self, DirBuilder, OpenOptions},
-};
-use time::{Date, Duration, OffsetDateTime};
+use crate::{RcCell, config::DisabledOptions, state::State};
+use serde::Serialize;
+use time::{Date, OffsetDateTime};
+
+mod config;
+mod set;
+mod state;
+pub use config::*;
+pub use set::*;
+pub use state::*;
+
+pub const DEFAULT_WEIGHT: f64 = 1.0;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -117,8 +116,8 @@ impl Task {
         self.config.borrow_mut().disable();
     }
 
-    pub fn choose(&self) {
-        self.state.borrow_mut().choose();
+    pub fn choose(&self, state: &State) {
+        self.state.borrow_mut().choose(state);
     }
 
     pub fn slug(&self) -> &str {

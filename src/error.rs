@@ -1,5 +1,7 @@
-use crate::config::TaskBuilderError;
-use camino::FromPathBufError;
+use crate::task::TaskBuilderError;
+use camino::FromPathBufError as NonUtf8PathError;
+use csv::Error as CsvError;
+use notify_rust::error::Error as NotificationError;
 use paste::paste;
 use rand::distr::weighted::Error as RandWeightError;
 use serde_yml::Error as YamlError;
@@ -7,135 +9,132 @@ use snafu::{AsBacktrace, Backtrace, Snafu};
 use std::{io::Error as IoError, result::Result as BaseResult, string::FromUtf8Error};
 use time::error::IndeterminateOffset as IndeterminateOffsetError;
 
-#[derive(Snafu, Debug)]
-#[snafu(visibility(pub))]
-pub enum Error {
-    Io {
-        source: IoError,
-        backtrace: Backtrace,
-    },
-    RandWeight {
-        source: RandWeightError,
-        backtrace: Backtrace,
-    },
-    TaskBuilder {
-        source: TaskBuilderError,
-        backtrace: Backtrace,
-    },
-    FromUtf8 {
-        source: FromUtf8Error,
-        backtrace: Backtrace,
-    },
-    Yaml {
-        source: YamlError,
-        backtrace: Backtrace,
-    },
-    NonUtf8Path {
-        source: FromPathBufError,
-        backtrace: Backtrace,
-    },
-    IndeterminateOffset {
-        source: IndeterminateOffsetError,
-        backtrace: Backtrace,
-    },
-    #[snafu(display("A task named '{slug}' already exists."))]
-    TaskAlreadyExists { slug: String, backtrace: Backtrace },
-    #[snafu(display("No task named '{slug}' was found."))]
-    TaskNotFound { slug: String, backtrace: Backtrace },
-    #[snafu(display("The current state for the {slug} task has not be loaded."))]
-    TaskStateNotLoaded { slug: String, backtrace: Backtrace },
-    #[snafu(display("{message}"))]
-    Other {
-        message: String,
-        backtrace: Backtrace,
-    },
+macro_rules! impl_error {
+    ($($name:ident,)+) => {
+        paste! {
+
+            #[derive(Snafu, Debug)]
+            #[snafu(visibility(pub))]
+            pub enum Error {
+                $(
+                    $name {
+                        source: [<$name Error>],
+                        backtrace: Backtrace,
+                    },
+                )*
+            }
+
+            impl Error {
+                pub fn backtrace(&self) -> &Backtrace {
+                    match self {$(
+                        Self::$name { backtrace, .. } => backtrace,
+                    )*}
+                }
+            }
+            $(
+                impl From<[<$name Error>]> for Error {
+                    fn from(error: [<$name Error>]) -> Self {
+                        Self::$name {
+                            source: error,
+                            backtrace: Backtrace::new(),
+                        }
+                    }
+                }
+            )*
+        }
+    }
+}
+
+impl_error! {
+    RanddGoals,
+    NonUtf8Path,
+    Io,
+    Notification,
+    RandWeight,
+    FromUtf8,
+    Yaml,
+    IndeterminateOffset,
+    TaskBuilder,
+    Csv,
 }
 
 impl Error {
-    pub fn backtrace(&self) -> &Backtrace {
-        match self {
-            Self::Io { backtrace, .. } => backtrace,
-            Self::RandWeight { backtrace, .. } => backtrace,
-            Self::TaskBuilder { backtrace, .. } => backtrace,
-            Self::FromUtf8 { backtrace, .. } => backtrace,
-            Self::Yaml { backtrace, .. } => backtrace,
-            Self::NonUtf8Path { backtrace, .. } => backtrace,
-            Self::TaskStateNotLoaded { backtrace, .. } => backtrace,
-            Self::TaskNotFound { backtrace, .. } => backtrace,
-            Self::TaskAlreadyExists { backtrace, .. } => backtrace,
-            Self::IndeterminateOffset { backtrace, .. } => backtrace,
-            Self::Other { backtrace, .. } => backtrace,
-        }
-    }
-
     #[inline(always)]
     pub(crate) fn simple<S: AsRef<str>>(message: S) -> Self {
-        Self::Other {
+        let source = RanddGoalsError::Other {
             message: String::from(message.as_ref()),
+        };
+        Self::RanddGoals {
+            source,
             backtrace: Backtrace::new(),
         }
     }
 
     #[inline(always)]
     pub(crate) fn task_not_found<S: AsRef<str>>(slug: S) -> Self {
-        Self::TaskNotFound {
+        let source = RanddGoalsError::TaskNotFound {
             slug: String::from(slug.as_ref()),
+        };
+        Self::RanddGoals {
+            source,
+            backtrace: Backtrace::new(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn unsupported_file_type<S: AsRef<str>>(extension: S) -> Self {
+        let source = RanddGoalsError::UnsupportedFileType {
+            extension: String::from(extension.as_ref()),
+        };
+        Self::RanddGoals {
+            source,
             backtrace: Backtrace::new(),
         }
     }
 
     #[inline(always)]
     pub(crate) fn task_already_exists<S: AsRef<str>>(slug: S) -> Self {
-        Self::TaskAlreadyExists {
+        let source = RanddGoalsError::TaskAlreadyExists {
             slug: String::from(slug.as_ref()),
+        };
+        Self::RanddGoals {
+            source,
             backtrace: Backtrace::new(),
         }
     }
 
     #[inline(always)]
     pub(crate) fn task_state_not_loaded<S: AsRef<str>>(slug: S) -> Self {
-        Self::TaskStateNotLoaded {
+        let source = RanddGoalsError::TaskStateNotLoaded {
             slug: String::from(slug.as_ref()),
+        };
+        Self::RanddGoals {
+            source,
             backtrace: Backtrace::new(),
         }
     }
 }
 
 impl AsBacktrace for Error {
+    #[inline(always)]
     fn as_backtrace(&self) -> Option<&Backtrace> {
         Some(self.backtrace())
     }
 }
 
-macro_rules! impl_from {
-    ($type:path, $error:ident, $base_error:ident) => {
-        impl From<$type> for $base_error {
-            #[inline(always)]
-            fn from(error: $type) -> Self {
-                Self::$error {
-                    source: error,
-                    backtrace: Backtrace::new(),
-                    //backtrace: Backtrace::capture(),
-                }
-            }
-        }
-    };
-    ($type:path, $error:ident) => {
-        impl_from! { $type, $error, Error }
-    };
-    ($name:ident) => {
-        paste! {
-            impl_from! { [<$name Error>], $name }
-        }
-    };
+#[derive(Snafu, Debug)]
+#[snafu(visibility(pub))]
+pub enum RanddGoalsError {
+    #[snafu(display("A task named '{slug}' already exists."))]
+    TaskAlreadyExists { slug: String },
+    #[snafu(display("No task named '{slug}' was found."))]
+    TaskNotFound { slug: String },
+    #[snafu(display("The current state for the {slug} task has not be loaded."))]
+    TaskStateNotLoaded { slug: String },
+    #[snafu(display("Files with the extension '{extension}' are not supported"))]
+    UnsupportedFileType { extension: String },
+    #[snafu(display("{message}"))]
+    Other { message: String },
 }
-
-impl_from! {FromPathBufError, NonUtf8Path}
-impl_from! {Io}
-impl_from! {RandWeight}
-impl_from! {FromUtf8}
-impl_from! {Yaml}
-impl_from! {IndeterminateOffset}
-impl_from! {TaskBuilder}
 
 pub type Result<V, E = Error> = BaseResult<V, E>;

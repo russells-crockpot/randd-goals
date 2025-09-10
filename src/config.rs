@@ -1,20 +1,13 @@
-use crate::{
-    CONFIG_FILE_PATH, Error, RcCell, Result, State,
-    util::{LOCAL_OFFSET, now, now_with_cutoff, today},
-};
-use derive_builder::Builder;
+use crate::{CONFIG_FILE_PATH, Error, RcCell, Result, TaskConfig, util::now_with_cutoff};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::{
     cell::OnceCell,
     collections::HashMap,
     fs::{self, OpenOptions},
-    ops::AddAssign,
 };
 use strum::EnumIs;
 use time::{Date, Duration, OffsetDateTime, Time, UtcOffset, macros::time};
-
-pub const DEFAULT_WEIGHT: f64 = 1.0;
 
 lazy_static! {
     pub static ref DEFAULT_CUT_OFF: Time = time!(04:00);
@@ -60,13 +53,13 @@ impl Config {
         config.tasks_map = config
             .tasks
             .iter()
-            .map(|g| (g.borrow().slug.clone(), RcCell::clone(g)))
+            .map(|g| (String::from(g.borrow().slug()), RcCell::clone(g)))
             .collect();
         Ok(config)
     }
 
     pub(crate) fn add_task(&mut self, task: RcCell<TaskConfig>) -> Result<()> {
-        let slug = task.borrow().slug.clone();
+        let slug = String::from(task.borrow().slug());
         if self.contains_task(&slug) {
             Err(Error::task_already_exists(slug))
         } else {
@@ -126,103 +119,5 @@ pub enum DisabledOptions {
 impl From<bool> for DisabledOptions {
     fn from(value: bool) -> Self {
         if value { Self::Disabled } else { Self::Enabled }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Builder, Getters)]
-#[serde(rename_all = "kebab-case")]
-#[builder(name = "TaskBuilder")]
-#[getset(get = "pub")]
-pub struct TaskConfig {
-    #[builder(default = "self.default_slug()")]
-    slug: String,
-    pub task: String,
-    #[builder(default)]
-    #[serde(default, skip_serializing_if = "std::option::Option::is_none")]
-    pub description: Option<String>,
-    #[builder(default = "DEFAULT_WEIGHT")]
-    pub weight: f64,
-    #[builder(default)]
-    #[serde(default, skip_serializing_if = "DisabledOptions::is_enabled")]
-    pub disabled: DisabledOptions,
-    #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
-    pub tags: Vec<String>,
-}
-
-impl TaskBuilder {
-    fn default_slug(&self) -> String {
-        slug::slugify(self.task.as_ref().unwrap())
-    }
-
-    pub fn tag<S: AsRef<str>>(&mut self, tag: S) -> &mut Self {
-        let tag = String::from(tag.as_ref());
-        self.tags = Some(if let Some(mut tags) = self.tags.take() {
-            tags.push(tag);
-            tags
-        } else {
-            vec![tag]
-        });
-        self
-    }
-}
-
-impl TaskConfig {
-    pub fn enable(&mut self) {
-        self.disabled = DisabledOptions::Enabled;
-    }
-
-    pub fn disable(&mut self) {
-        self.disabled = DisabledOptions::Disabled;
-    }
-
-    /// Takes the values from the `other` argument, and overrides the values in this struct as long
-    /// as the value in the other struct is not the default value. **Note**: the `slug` property is
-    /// never overwritten.
-    pub(crate) fn merge(&mut self, other: Self) {
-        if !other.task.is_empty() {
-            self.task = other.task;
-        }
-        if other.weight != DEFAULT_WEIGHT {
-            self.weight = other.weight;
-        }
-        if other.disabled != DisabledOptions::Enabled {
-            self.disabled = other.disabled;
-        }
-        for tag in other.tags.into_iter() {
-            if !self.tags.contains(&tag) {
-                self.tags.push(tag);
-            }
-        }
-    }
-
-    pub fn update(&mut self, other: TaskBuilder) {
-        if let Some(task) = other.task {
-            self.task = task;
-        }
-        if let Some(weight) = other.weight {
-            self.weight = weight;
-        }
-        if let Some(disabled) = other.disabled {
-            self.disabled = disabled;
-        }
-        if let Some(tags) = other.tags {
-            for tag in tags.into_iter() {
-                if !self.tags.contains(&tag) {
-                    self.tags.push(tag);
-                }
-            }
-        }
-    }
-}
-
-impl AddAssign for TaskConfig {
-    fn add_assign(&mut self, other: Self) {
-        self.merge(other);
-    }
-}
-
-impl AddAssign<TaskBuilder> for TaskConfig {
-    fn add_assign(&mut self, other: TaskBuilder) {
-        self.update(other);
     }
 }

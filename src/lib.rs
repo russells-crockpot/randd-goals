@@ -6,11 +6,11 @@ extern crate lazy_static;
 use camino::Utf8PathBuf;
 
 pub mod state;
-pub use state::{State, TaskState};
+pub use state::State;
 pub mod task;
-pub use task::{Task, TaskInfo};
+pub use task::{Task, TaskBuilder, TaskConfig, TaskInfo, TaskState};
 pub mod config;
-pub use config::{Config, TaskConfig};
+pub use config::Config;
 pub mod commands;
 pub use commands::Cli;
 pub(crate) mod error;
@@ -18,7 +18,8 @@ pub use error::{Error, Result};
 pub mod util;
 pub use util::RcCell;
 mod picker;
-pub(crate) use picker::pick_tasks;
+pub(crate) use picker::*;
+pub mod serializers;
 
 lazy_static! {
     pub static ref CONFIG_FILE_PATH: Utf8PathBuf = {

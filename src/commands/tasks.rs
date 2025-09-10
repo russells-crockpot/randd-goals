@@ -1,12 +1,13 @@
 use super::ExecutableCommand;
 use crate::{
     Error, Result, State,
-    config::TaskBuilder,
-    task::{Task, TaskInfo},
+    error::RanddGoalsError,
+    task::{TaskBuilder, TaskConfig},
 };
+use camino::Utf8PathBuf;
 use clap::Parser;
 use cli_table::{Cell, Table};
-use std::{collections::BTreeMap, io};
+use std::{collections::BTreeMap, fs, io};
 
 #[derive(Debug, Parser)]
 #[command(rename_all = "kebab")]
@@ -183,7 +184,7 @@ impl_into_task_builder! {
 }
 
 impl ExecutableCommand for UpdateTaskCommand {
-    fn execute(self, mut state: State) -> Result<()> {
+    fn execute(self, state: State) -> Result<()> {
         let task = TaskBuilder::from(self).build()?;
         state.update_task(task)?;
         state.save()
@@ -197,7 +198,7 @@ pub struct EnableTaskCommand {
 }
 
 impl ExecutableCommand for EnableTaskCommand {
-    fn execute(self, mut state: State) -> Result<()> {
+    fn execute(self, state: State) -> Result<()> {
         state.enable_tasks(self.tasks)?;
         state.save()
     }
@@ -211,7 +212,7 @@ pub struct DisableTaskCommand {
 }
 
 impl ExecutableCommand for DisableTaskCommand {
-    fn execute(self, mut state: State) -> Result<()> {
+    fn execute(self, state: State) -> Result<()> {
         state.disable_tasks(self.tasks)?;
         state.save()
     }
@@ -224,7 +225,7 @@ pub struct TaskDetailsCommand {
 }
 
 impl ExecutableCommand for TaskDetailsCommand {
-    fn execute(self, mut state: State) -> Result<()> {
+    fn execute(self, state: State) -> Result<()> {
         let tasks = if self.tasks.is_empty() {
             state.task_names()
         } else {
@@ -237,7 +238,7 @@ impl ExecutableCommand for TaskDetailsCommand {
             .flat_map(|r| r.map(|t| t.info(&state)))
             .map(|i| (i.slug.clone(), i))
             .collect();
-        let mut stdout = io::stdout();
+        let stdout = io::stdout();
         serde_yml::to_writer(stdout, &infos)?;
         Ok(())
     }
@@ -258,18 +259,71 @@ impl ExecutableCommand for RemoveTaskCommand {
 
 #[derive(Debug, Parser)]
 pub struct CompleteTaskCommand {
+    //TODO make mutually exclusive with positional args
+    #[arg(short, long)]
+    pub all: bool,
     #[arg()]
     pub tasks: Vec<String>,
 }
 
 impl ExecutableCommand for CompleteTaskCommand {
-    fn execute(self, mut state: State) -> Result<()> {
-        self.tasks.into_iter().try_for_each(|slug| {
+    fn execute(self, state: State) -> Result<()> {
+        let tasks = if self.all {
+            state.todays_tasks().into()
+        } else {
+            self.tasks
+        };
+        tasks.into_iter().try_for_each(|slug| {
             state
                 .get_task(&slug)
                 .ok_or_else(|| Error::task_not_found(&slug))
                 .map(|task| task.complete())
         })?;
         state.save()
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct ImportTaskCommand {
+    #[arg(short, long)]
+    /// Update the task if it already exists.
+    pub update: bool,
+    #[arg()]
+    pub file: Utf8PathBuf,
+}
+
+impl ExecutableCommand for ImportTaskCommand {
+    fn execute(self, mut state: State) -> Result<()> {
+        println!("Reading file: {}", self.file);
+        let tasks: Vec<TaskConfig> = match self.file.extension() {
+            Some(".yml") | Some(".yaml") => {
+                let data = fs::read(&self.file)?;
+                serde_yml::from_slice(&data)?
+            }
+            Some(".csv") | Some(".tsv") | Some(".psv") => {
+                //TODO handle errors
+                csv::Reader::from_path(&self.file)?
+                    .into_deserialize()
+                    .flatten()
+                    .collect()
+            }
+            Some(ext) => return Err(Error::unsupported_file_type(ext)),
+            None => return Err(Error::unsupported_file_type("No extension")),
+        };
+        println!("Importing {} task(s).", tasks.len());
+        if self.update {
+            state.upsert_tasks(tasks);
+        } else {
+            for task in tasks {
+                if let Err(Error::RanddGoals {
+                    source: RanddGoalsError::TaskAlreadyExists { slug },
+                    ..
+                }) = state.add_task(task)
+                {
+                    println!("Task {slug} already exists; skipping...");
+                }
+            }
+        }
+        Ok(())
     }
 }
