@@ -78,6 +78,13 @@ impl Config {
         self.tasks_map.get(slug.as_ref()).cloned()
     }
 
+    pub fn task_slugs(&self) -> Vec<String> {
+        self.tasks
+            .iter()
+            .map(|t| String::from(t.borrow().slug()))
+            .collect()
+    }
+
     /// What today's date should be considered, taken the config's cut-off time.
     pub fn today(&self) -> Date {
         *self

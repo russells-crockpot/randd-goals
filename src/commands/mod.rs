@@ -6,6 +6,7 @@ pub mod tasks;
 use tasks::TaskCommands;
 pub mod today;
 pub use today::TodayCommands;
+mod completion;
 
 #[derive(Debug, Parser)]
 #[command(version, author)]

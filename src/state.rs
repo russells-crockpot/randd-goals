@@ -213,6 +213,46 @@ impl State {
     }
 
     #[inline]
+    pub fn uncompleted_tasks(&self) -> Result<Vec<&Task>> {
+        Ok(self
+            .model
+            .todays_tasks
+            .resolve(self)?
+            .into_iter()
+            .filter(|t| !t.completed())
+            .collect())
+    }
+
+    #[inline]
+    pub fn completed_tasks(&self) -> Result<Vec<&Task>> {
+        Ok(self
+            .model
+            .todays_tasks
+            .resolve(self)?
+            .into_iter()
+            .filter(|t| t.completed())
+            .collect())
+    }
+
+    #[inline]
+    pub fn enabled_tasks(&self) -> Vec<&Task> {
+        self.tasks
+            .values()
+            .into_iter()
+            .filter(|t| !t.disabled(self))
+            .collect()
+    }
+
+    #[inline]
+    pub fn disabled_tasks(&self) -> Vec<&Task> {
+        self.tasks
+            .values()
+            .into_iter()
+            .filter(|t| t.disabled(self))
+            .collect()
+    }
+
+    #[inline]
     pub fn todays_tasks(&self) -> &TaskSet {
         &self.model.todays_tasks
     }

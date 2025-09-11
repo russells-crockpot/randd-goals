@@ -1,10 +1,11 @@
-use super::ExecutableCommand;
+use super::{ExecutableCommand, completion, tasks::CompleteTaskCommand};
 use crate::{
     Error, Result, State,
     picker::pick_todays_tasks,
     task::{TaskInfo, TaskSet, TaskStatus},
 };
 use clap::Parser;
+use clap_complete::{ArgValueCompleter, PathCompleter};
 use notify_rust::Notification;
 use serde::Serialize;
 use std::{
@@ -49,9 +50,14 @@ fn get_and_print_task_list_items<S: AsRef<TaskSet>>(state: &State, tasks: S) -> 
 #[derive(Debug, Parser)]
 #[command(rename_all = "kebab")]
 pub enum TodayCommands {
+    /// Get today's tasks.
     Get(GetTodaysTasksCommand),
+    /// Replace some of today's tasks with new ones.
     Refresh(RefreshTodaysTasksCommand),
+    /// Replace all of today's tasks.
     Reset(ResetTodaysTasksCommand),
+    /// Mark task(s) as complete.
+    Complete(CompleteTaskCommand),
 }
 
 impl ExecutableCommand for TodayCommands {
@@ -60,6 +66,7 @@ impl ExecutableCommand for TodayCommands {
             Self::Get(cmd) => cmd.execute(state),
             Self::Refresh(cmd) => cmd.execute(state),
             Self::Reset(cmd) => cmd.execute(state),
+            Self::Complete(cmd) => cmd.execute(state),
         }
     }
 }
@@ -98,7 +105,7 @@ pub struct RefreshTodaysTasksCommand {
     #[arg(short, long)]
     /// Whether or not all completed tasks should also be refreshed
     pub completed: bool,
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(completion::todays_tasks))]
     pub tasks: Vec<String>,
 }
 
@@ -128,10 +135,7 @@ impl ExecutableCommand for RefreshTodaysTasksCommand {
 }
 
 #[derive(Debug, Parser)]
-pub struct ResetTodaysTasksCommand {
-    //#[arg()]
-    //pub tasks: Vec<String>,
-}
+pub struct ResetTodaysTasksCommand {}
 
 impl ExecutableCommand for ResetTodaysTasksCommand {
     fn execute(self, mut state: State) -> Result<()> {

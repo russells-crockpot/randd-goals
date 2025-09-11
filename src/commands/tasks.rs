@@ -1,4 +1,4 @@
-use super::ExecutableCommand;
+use super::{ExecutableCommand, completion};
 use crate::{
     Error, Result, State,
     error::RanddGoalsError,
@@ -6,21 +6,31 @@ use crate::{
 };
 use camino::Utf8PathBuf;
 use clap::Parser;
+use clap_complete::{ArgValueCompleter, PathCompleter};
 use cli_table::{Cell, Table};
 use std::{collections::BTreeMap, fs, io};
 
 #[derive(Debug, Parser)]
 #[command(rename_all = "kebab")]
 pub enum TaskCommands {
+    /// Add a new task.
     Add(AddTaskCommand),
+    /// Add a new task or update it if the task already exists.
     Upsert(UpsertTaskCommand),
+    /// Update an existing task.
     Update(UpdateTaskCommand),
     #[command(name = "rm")]
+    /// Delete a task.
     Remove(RemoveTaskCommand),
+    /// Print a simple list of all tasks.
     List,
+    /// Get details about task(s).
     Details(TaskDetailsCommand),
+    /// Enable task(s).
     Enable(EnableTaskCommand),
+    /// Disable task(s).
     Disable(DisableTaskCommand),
+    /// Mark task(s) as complete.
     Complete(CompleteTaskCommand),
 }
 
@@ -104,14 +114,19 @@ macro_rules! impl_into_task_builder {
 #[derive(Debug, Parser)]
 pub struct AddTaskCommand {
     #[arg(short, long)]
+    /// The task's slug/id.
     pub slug: Option<String>,
     #[arg(short, long)]
+    /// How likely the task is to be chosen.
     pub weight: Option<f64>,
     #[arg(long = "tag")]
+    /// Any tags to associate with the task.
     pub tags: Vec<String>,
     #[arg(short, long)]
+    /// A more detailed description of the task.
     pub description: Option<String>,
     #[arg()]
+    /// The task's title/summary.
     pub task: String,
 }
 
@@ -134,14 +149,20 @@ impl ExecutableCommand for AddTaskCommand {
 #[derive(Debug, Parser)]
 pub struct UpsertTaskCommand {
     #[arg(short, long)]
+    /// How likely the task is to be chosen.
     pub weight: Option<f64>,
     #[arg(long = "tag")]
+    /// Any tags to associate with the task.
     pub tags: Vec<String>,
     #[arg(short, long)]
+    /// A more detailed description of the task.
     pub description: Option<String>,
     #[arg(short, long)]
+    /// The task's title/summary.
     pub task: Option<String>,
     #[arg()]
+    //TODO make not required
+    /// The task's slug/id.
     pub slug: String,
 }
 
@@ -164,14 +185,19 @@ impl ExecutableCommand for UpsertTaskCommand {
 #[derive(Debug, Parser)]
 pub struct UpdateTaskCommand {
     #[arg(short, long)]
+    /// How likely the task is to be chosen.
     pub weight: Option<f64>,
     #[arg(long = "tag")]
+    /// Any tags to associate with the task.
     pub tags: Vec<String>,
     #[arg(short, long)]
+    /// A more detailed description of the task.
     pub description: Option<String>,
     #[arg(short, long)]
+    /// The task's title/summary.
     pub task: Option<String>,
-    #[arg()]
+    /// The task's slug/id.
+    #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
     pub slug: String,
 }
 
@@ -193,7 +219,8 @@ impl ExecutableCommand for UpdateTaskCommand {
 
 #[derive(Debug, Parser)]
 pub struct EnableTaskCommand {
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(completion::disabled_tasks))]
+    /// The task(s) to enable.
     pub tasks: Vec<String>,
 }
 
@@ -207,7 +234,8 @@ impl ExecutableCommand for EnableTaskCommand {
 #[derive(Debug, Parser)]
 //TODO add options
 pub struct DisableTaskCommand {
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(completion::enabled_tasks))]
+    /// The task(s) to disable.
     pub tasks: Vec<String>,
 }
 
@@ -220,7 +248,8 @@ impl ExecutableCommand for DisableTaskCommand {
 
 #[derive(Debug, Parser)]
 pub struct TaskDetailsCommand {
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
+    /// The task(s) to print the details for.
     pub tasks: Vec<String>,
 }
 
@@ -246,7 +275,8 @@ impl ExecutableCommand for TaskDetailsCommand {
 
 #[derive(Debug, Parser)]
 pub struct RemoveTaskCommand {
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
+    /// The task(s) to remove.
     pub tasks: Vec<String>,
 }
 
@@ -261,8 +291,10 @@ impl ExecutableCommand for RemoveTaskCommand {
 pub struct CompleteTaskCommand {
     //TODO make mutually exclusive with positional args
     #[arg(short, long)]
+    /// Mark all of today's tasks as complete.
     pub all: bool,
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(completion::uncompleted_tasks))]
+    /// The task(s) to complete.
     pub tasks: Vec<String>,
 }
 
@@ -286,9 +318,10 @@ impl ExecutableCommand for CompleteTaskCommand {
 #[derive(Debug, Parser)]
 pub struct ImportTaskCommand {
     #[arg(short, long)]
-    /// Update the task if it already exists.
+    /// Update any tasks that already exist.
     pub update: bool,
-    #[arg()]
+    #[arg(add = ArgValueCompleter::new(PathCompleter::file()))]
+    /// The csv or yaml file to import tasks from.
     pub file: Utf8PathBuf,
 }
 
