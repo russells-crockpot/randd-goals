@@ -26,6 +26,9 @@ pub struct TaskConfig {
     #[builder(default)]
     #[serde(default, skip_serializing_if = "std::option::Option::is_none")]
     pub max_occurrences: Option<u32>,
+    #[builder(default)]
+    #[serde(default, skip_serializing_if = "std::option::Option::is_none")]
+    pub min_frequency: Option<u32>,
     #[builder(default = "DEFAULT_WEIGHT")]
     pub weight: f64,
     #[builder(default)]
@@ -84,8 +87,19 @@ impl TaskConfig {
         if !other.task.is_empty() {
             self.task = other.task;
         }
+        if let Some(description) = other.description
+            && !description.is_empty()
+        {
+            self.description = Some(description);
+        }
         if other.weight != DEFAULT_WEIGHT {
             self.weight = other.weight;
+        }
+        if other.min_frequency.unwrap_or(0) != 0 {
+            self.min_frequency = other.min_frequency;
+        }
+        if other.max_occurrences.unwrap_or(0) != 0 {
+            self.max_occurrences = other.max_occurrences;
         }
         if other.disabled != DisabledOptions::Enabled {
             self.disabled = other.disabled;
@@ -101,8 +115,17 @@ impl TaskConfig {
         if let Some(task) = other.task {
             self.task = task;
         }
+        if let Some(description) = other.description {
+            self.description = description;
+        }
         if let Some(weight) = other.weight {
             self.weight = weight;
+        }
+        if let Some(min_frequency) = other.min_frequency {
+            self.min_frequency = min_frequency;
+        }
+        if let Some(max_occurrences) = other.max_occurrences {
+            self.max_occurrences = max_occurrences;
         }
         if let Some(disabled) = other.disabled {
             self.disabled = disabled;

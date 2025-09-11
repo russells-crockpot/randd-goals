@@ -125,6 +125,12 @@ pub struct AddTaskCommand {
     #[arg(short, long)]
     /// A more detailed description of the task.
     pub description: Option<String>,
+    #[arg(short = 'o', long)]
+    /// How many times this task can be completed before it is disabled (unimplemented).
+    pub max_occurrences: Option<u32>,
+    #[arg(short = 'f', long)]
+    /// Minimum number of days before the task can be chosen again (unimplemented).
+    pub min_frequency: Option<u32>,
     #[arg()]
     /// The task's title/summary.
     pub task: String,
@@ -132,7 +138,7 @@ pub struct AddTaskCommand {
 
 impl_into_task_builder! {
     AddTaskCommand {
-        required: (task, tags, description),
+        required: (task, tags, description, max_occurrences, min_frequency),
         optional: (slug),
         copy: (weight),
     }
@@ -160,6 +166,12 @@ pub struct UpsertTaskCommand {
     #[arg(short, long)]
     /// The task's title/summary.
     pub task: Option<String>,
+    #[arg(short = 'o', long)]
+    /// How many times this task can be completed before it is disabled (unimplemented).
+    pub max_occurrences: Option<u32>,
+    #[arg(short = 'f', long)]
+    /// Minimum number of days before the task can be chosen again (unimplemented).
+    pub min_frequency: Option<u32>,
     #[arg()]
     //TODO make not required
     /// The task's slug/id.
@@ -168,7 +180,7 @@ pub struct UpsertTaskCommand {
 
 impl_into_task_builder! {
     UpsertTaskCommand {
-        required: (slug, tags, description),
+        required: (slug, tags, description, max_occurrences, min_frequency),
         optional: (task),
         copy: (weight),
     }
@@ -196,6 +208,12 @@ pub struct UpdateTaskCommand {
     #[arg(short, long)]
     /// The task's title/summary.
     pub task: Option<String>,
+    #[arg(short = 'o', long)]
+    /// How many times this task can be completed before it is disabled (unimplemented).
+    pub max_occurrences: Option<u32>,
+    #[arg(short = 'f', long)]
+    /// Minimum number of days before the task can be chosen again (unimplemented).
+    pub min_frequency: Option<u32>,
     /// The task's slug/id.
     #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
     pub slug: String,
@@ -203,7 +221,7 @@ pub struct UpdateTaskCommand {
 
 impl_into_task_builder! {
     UpdateTaskCommand {
-        required: (slug, tags, description),
+        required: (slug, tags, description, max_occurrences, min_frequency),
         optional: (task),
         copy: (weight),
     }
