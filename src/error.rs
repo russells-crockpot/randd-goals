@@ -1,4 +1,4 @@
-use crate::task::TaskBuilderError;
+use crate::task::{StepBuilderError, TaskBuilderError};
 use camino::FromPathBufError as NonUtf8PathError;
 use csv::Error as CsvError;
 use notify_rust::error::Error as NotificationError;
@@ -7,7 +7,9 @@ use rand::distr::weighted::Error as RandWeightError;
 use serde_yml::Error as YamlError;
 use snafu::{AsBacktrace, Backtrace, Snafu};
 use std::{io::Error as IoError, result::Result as BaseResult, string::FromUtf8Error};
-use time::error::IndeterminateOffset as IndeterminateOffsetError;
+use time::{
+    error::IndeterminateOffset as IndeterminateOffsetError, error::Parse as DateParsingError,
+};
 
 macro_rules! impl_error {
     ($($name:ident,)+) => {
@@ -55,7 +57,9 @@ impl_error! {
     Yaml,
     IndeterminateOffset,
     TaskBuilder,
+    StepBuilder,
     Csv,
+    DateParsing,
 }
 
 impl Error {

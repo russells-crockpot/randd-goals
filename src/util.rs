@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{borrow::Borrow, cell::RefCell, ops::Deref, rc::Rc};
-use time::{Date, Duration, OffsetDateTime, Time, UtcOffset};
+use time::{Date, Duration, OffsetDateTime, Time, UtcOffset, macros::time};
 
 lazy_static! {
     pub(crate) static ref LOCAL_OFFSET: UtcOffset = UtcOffset::current_local_offset().unwrap();
@@ -29,6 +29,18 @@ pub fn dt_with_cutoff(dt: &OffsetDateTime, cut_off: Time) -> Date {
 #[inline]
 pub fn now_with_cutoff(cut_off: Time) -> Date {
     dt_with_cutoff(&now(), cut_off)
+}
+
+#[inline]
+pub fn date_to_datetime(date: Date) -> OffsetDateTime {
+    OffsetDateTime::new_in_offset(date, time!(0:00), *LOCAL_OFFSET)
+}
+
+pub fn days_elapsed(d1: Date, d2: Date) -> i64 {
+    let d1_dt = date_to_datetime(d1);
+    let d2_dt = date_to_datetime(d2);
+    let elapsed = d1_dt - d2_dt;
+    elapsed.whole_days()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, Default)]

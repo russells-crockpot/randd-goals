@@ -2,7 +2,7 @@ use crate::{
     Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH,
     config::Config,
     task::{Task, TaskConfig, TaskSet, TaskState},
-    util::{dt_with_cutoff, now},
+    util::{days_elapsed, dt_with_cutoff, now},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -135,6 +135,8 @@ impl State {
 
     pub fn remove_task<S: AsRef<str>>(&mut self, slug: S) -> Result<()> {
         if self.tasks.remove(slug.as_ref()).is_some() {
+            self.model.tasks.remove(slug.as_ref());
+            self.config.remove_task(slug);
             Ok(())
         } else {
             Err(Error::task_not_found(slug))
@@ -203,7 +205,7 @@ impl State {
     }
 
     #[inline]
-    pub fn task_names(&self) -> Vec<String> {
+    pub fn task_slugs(&self) -> Vec<String> {
         self.tasks.keys().map(Clone::clone).collect()
     }
 
@@ -236,20 +238,12 @@ impl State {
 
     #[inline]
     pub fn enabled_tasks(&self) -> Vec<&Task> {
-        self.tasks
-            .values()
-            .into_iter()
-            .filter(|t| !t.disabled(self))
-            .collect()
+        self.tasks.values().filter(|t| !t.disabled(self)).collect()
     }
 
     #[inline]
     pub fn disabled_tasks(&self) -> Vec<&Task> {
-        self.tasks
-            .values()
-            .into_iter()
-            .filter(|t| t.disabled(self))
-            .collect()
+        self.tasks.values().filter(|t| t.disabled(self)).collect()
     }
 
     #[inline]
@@ -276,6 +270,11 @@ impl State {
     #[inline]
     pub fn mark_generated(&mut self) {
         self.model.last_generated = now();
+    }
+
+    #[inline]
+    pub fn days_since_today(&self, date: Date) -> i64 {
+        days_elapsed(self.config.today(), date)
     }
 }
 

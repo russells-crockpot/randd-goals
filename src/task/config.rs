@@ -1,4 +1,4 @@
-use super::DEFAULT_WEIGHT;
+use super::{DEFAULT_SPOONS, DEFAULT_WEIGHT};
 use crate::config::DisabledOptions;
 use derive_builder::Builder;
 use getset::Getters;
@@ -15,7 +15,7 @@ fn get_default_slug<S: AsRef<str>>(task: S) -> String {
 #[builder(name = "TaskBuilder")]
 #[getset(get = "pub")]
 pub struct TaskConfig {
-    #[builder(setter(custom = true))]
+    #[builder(setter(custom = true), default = "self.default_slug()")]
     #[getset(skip)]
     #[serde(with = "crate::serializers::once_cell")]
     slug: OnceCell<String>,
@@ -31,17 +31,44 @@ pub struct TaskConfig {
     pub min_frequency: Option<u32>,
     #[builder(default = "DEFAULT_WEIGHT")]
     pub weight: f64,
+    #[builder(default = "DEFAULT_SPOONS")]
+    pub spoons: u16,
     #[builder(default)]
     #[serde(default, skip_serializing_if = "DisabledOptions::is_enabled")]
     pub disabled: DisabledOptions,
     #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
     pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
+    #[builder(field(ty = "Vec<StepBuilder>", build = "self.build_steps()"))]
+    pub steps: Vec<StepConfig>,
 }
 
 impl TaskBuilder {
     #[inline]
-    fn default_slug(&self) -> String {
-        get_default_slug(self.task.as_ref().unwrap())
+    fn default_slug(&self) -> OnceCell<String> {
+        let cell = OnceCell::new();
+        cell.set(get_default_slug(self.task.as_ref().unwrap()))
+            .unwrap();
+        cell
+    }
+
+    fn build_steps(&self) -> Vec<StepConfig> {
+        //TODO handle error
+        self.steps
+            .iter()
+            .flat_map(|s| s.build())
+            .enumerate()
+            .map(|(i, mut s)| {
+                s.order = i + 1;
+                s
+            })
+            .collect()
+    }
+
+    #[inline]
+    pub fn step(&mut self, step: StepBuilder) -> &mut Self {
+        self.steps.push(step);
+        self
     }
 
     pub fn slug(&mut self, value: String) -> &mut Self {
@@ -68,16 +95,27 @@ impl TaskBuilder {
 }
 
 impl TaskConfig {
+    #[inline]
     pub fn slug(&self) -> &str {
         self.slug.get_or_init(|| get_default_slug(&self.task))
     }
 
+    #[inline]
     pub fn enable(&mut self) {
         self.disabled = DisabledOptions::Enabled;
     }
 
+    #[inline]
     pub fn disable(&mut self) {
         self.disabled = DisabledOptions::Disabled;
+    }
+
+    #[inline]
+    pub(crate) fn recalculate_step_orders(&mut self) {
+        self.steps
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, mut step)| step.order = i + 1)
     }
 
     /// Takes the values from the `other` argument, and overrides the values in this struct as long
@@ -150,4 +188,15 @@ impl AddAssign<TaskBuilder> for TaskConfig {
     fn add_assign(&mut self, other: TaskBuilder) {
         self.update(other);
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Builder, Getters)]
+#[serde(rename_all = "kebab-case")]
+#[builder(name = "StepBuilder")]
+#[getset(get = "pub")]
+pub struct StepConfig {
+    pub title: String,
+    pub order: usize,
+    #[serde(default, skip_serializing_if = "std::option::Option::is_none")]
+    pub description: Option<String>,
 }

@@ -1,5 +1,7 @@
-use crate::{Result, State};
-use clap::Parser;
+use crate::{Error, Result, State};
+use clap::{Parser, Subcommand};
+use std::ffi::OsStr;
+use time::{Date, format_description::well_known::Iso8601};
 
 pub mod config;
 pub mod tasks;
@@ -7,6 +9,11 @@ use tasks::TaskCommands;
 pub mod today;
 pub use today::TodayCommands;
 mod completion;
+
+#[inline]
+pub(crate) fn parse_date(value: &str) -> Result<Date> {
+    Date::parse(value, &Iso8601::DATE).map_err(Error::from)
+}
 
 #[derive(Debug, Parser)]
 #[command(version, author)]
@@ -29,7 +36,7 @@ impl Default for Cli {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Subcommand)]
 pub enum Commands {
     #[command(subcommand)]
     Tasks(TaskCommands),

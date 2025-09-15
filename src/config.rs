@@ -96,6 +96,17 @@ impl Config {
         let offset = UtcOffset::current_local_offset().unwrap();
         OffsetDateTime::new_in_offset(date, self.cut_off, offset)
     }
+
+    pub fn remove_task<S: AsRef<str>>(&mut self, slug: S) {
+        if let Some(pos) = self
+            .tasks
+            .iter()
+            .position(|t| t.borrow().slug() == slug.as_ref())
+        {
+            self.tasks.remove(pos);
+            self.tasks_map.remove(slug.as_ref());
+        }
+    }
 }
 
 impl Default for Config {
@@ -115,8 +126,8 @@ impl Default for Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, EnumIs, PartialEq)]
 pub enum DisabledOptions {
-    For(Duration),
-    Until(OffsetDateTime),
+    For(u32),
+    Until(Date),
     //TODO (ser/de)serialize from bool
     Disabled,
     #[default]

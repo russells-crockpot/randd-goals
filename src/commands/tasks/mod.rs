@@ -1,28 +1,33 @@
-use super::{ExecutableCommand, completion};
+use super::{ExecutableCommand, completion, parse_date};
 use crate::{
     Error, Result, State,
     error::RanddGoalsError,
     task::{TaskBuilder, TaskConfig},
 };
 use camino::Utf8PathBuf;
-use clap::Parser;
+use clap::{Args, Subcommand};
 use clap_complete::{ArgValueCompleter, PathCompleter};
 use cli_table::{Cell, Table};
 use std::{collections::BTreeMap, fs, io};
+use time::Date;
 
-#[derive(Debug, Parser)]
+pub mod steps;
+
+#[derive(Debug, Subcommand)]
 #[command(rename_all = "kebab")]
 pub enum TaskCommands {
     /// Add a new task.
+    #[command(aliases=["a", "n", "new"])]
     Add(AddTaskCommand),
     /// Add a new task or update it if the task already exists.
     Upsert(UpsertTaskCommand),
     /// Update an existing task.
     Update(UpdateTaskCommand),
-    #[command(name = "rm")]
+    #[command(aliases = ["rm", "delete"])]
     /// Delete a task.
     Remove(RemoveTaskCommand),
     /// Print a simple list of all tasks.
+    #[command(alias = "ls")]
     List,
     /// Get details about task(s).
     Details(TaskDetailsCommand),
@@ -31,17 +36,23 @@ pub enum TaskCommands {
     /// Disable task(s).
     Disable(DisableTaskCommand),
     /// Mark task(s) as complete.
+    #[command(aliases = ["c", "done"])]
     Complete(CompleteTaskCommand),
+    /// Import tasks from a file.
+    Import(ImportTaskCommand),
 }
 
 fn list_tasks(state: State) -> Result<()> {
-    let table = state
-        .task_names()
-        .into_iter()
-        .flat_map(|s| state.get_task(&s).ok_or_else(|| Error::task_not_found(&s)))
-        .map(|t| vec![t.slug().cell(), t.task().cell()])
-        .collect::<Vec<_>>()
-        .table();
+    let tasks = state.tasks();
+    let table = if tasks.is_empty() {
+        vec![vec!["No Tasks".cell()]].table()
+    } else {
+        tasks
+            .into_iter()
+            .map(|t| vec![t.slug().cell(), t.task().cell()])
+            .collect::<Vec<_>>()
+            .table()
+    };
     cli_table::print_stdout(table)?;
     Ok(())
 }
@@ -58,6 +69,7 @@ impl ExecutableCommand for TaskCommands {
             Self::Disable(cmd) => cmd.execute(state),
             Self::Remove(cmd) => cmd.execute(state),
             Self::Complete(cmd) => cmd.execute(state),
+            Self::Import(cmd) => cmd.execute(state),
         }
     }
 }
@@ -111,7 +123,7 @@ macro_rules! impl_into_task_builder {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct AddTaskCommand {
     #[arg(short, long)]
     /// The task's slug/id.
@@ -152,7 +164,7 @@ impl ExecutableCommand for AddTaskCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct UpsertTaskCommand {
     #[arg(short, long)]
     /// How likely the task is to be chosen.
@@ -194,7 +206,7 @@ impl ExecutableCommand for UpsertTaskCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct UpdateTaskCommand {
     #[arg(short, long)]
     /// How likely the task is to be chosen.
@@ -235,7 +247,7 @@ impl ExecutableCommand for UpdateTaskCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct EnableTaskCommand {
     #[arg(add = ArgValueCompleter::new(completion::disabled_tasks))]
     /// The task(s) to enable.
@@ -249,9 +261,16 @@ impl ExecutableCommand for EnableTaskCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 //TODO add options
 pub struct DisableTaskCommand {
+    //TODO add date completer
+    #[arg(short, long, value_parser = parse_date, conflicts_with = "until")]
+    /// Disable the task(s) until a certain date (TODO).
+    pub until: Option<Date>,
+    #[arg(short, long = "for")]
+    /// Disable the task(s) for a certain number of days (TODO).
+    pub for_: Option<u32>,
     #[arg(add = ArgValueCompleter::new(completion::enabled_tasks))]
     /// The task(s) to disable.
     pub tasks: Vec<String>,
@@ -264,7 +283,7 @@ impl ExecutableCommand for DisableTaskCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct TaskDetailsCommand {
     #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
     /// The task(s) to print the details for.
@@ -274,7 +293,7 @@ pub struct TaskDetailsCommand {
 impl ExecutableCommand for TaskDetailsCommand {
     fn execute(self, state: State) -> Result<()> {
         let tasks = if self.tasks.is_empty() {
-            state.task_names()
+            state.task_slugs()
         } else {
             self.tasks
         };
@@ -291,7 +310,7 @@ impl ExecutableCommand for TaskDetailsCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct RemoveTaskCommand {
     #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
     /// The task(s) to remove.
@@ -300,18 +319,19 @@ pub struct RemoveTaskCommand {
 
 impl ExecutableCommand for RemoveTaskCommand {
     fn execute(self, mut state: State) -> Result<()> {
+        println!("Removing {} task(s).", self.tasks.len());
         state.remove_tasks(self.tasks)?;
         state.save()
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct CompleteTaskCommand {
     //TODO make mutually exclusive with positional args
     #[arg(short, long)]
     /// Mark all of today's tasks as complete.
     pub all: bool,
-    #[arg(add = ArgValueCompleter::new(completion::uncompleted_tasks))]
+    #[arg(add = ArgValueCompleter::new(completion::uncompleted_tasks), conflicts_with = "all")]
     /// The task(s) to complete.
     pub tasks: Vec<String>,
 }
@@ -333,7 +353,7 @@ impl ExecutableCommand for CompleteTaskCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct ImportTaskCommand {
     #[arg(short, long)]
     /// Update any tasks that already exist.
@@ -347,11 +367,11 @@ impl ExecutableCommand for ImportTaskCommand {
     fn execute(self, mut state: State) -> Result<()> {
         println!("Reading file: {}", self.file);
         let tasks: Vec<TaskConfig> = match self.file.extension() {
-            Some(".yml") | Some(".yaml") => {
+            Some("yml") | Some("yaml") => {
                 let data = fs::read(&self.file)?;
                 serde_yml::from_slice(&data)?
             }
-            Some(".csv") | Some(".tsv") | Some(".psv") => {
+            Some("csv") | Some("tsv") | Some("psv") => {
                 //TODO handle errors
                 csv::Reader::from_path(&self.file)?
                     .into_deserialize()
@@ -375,6 +395,8 @@ impl ExecutableCommand for ImportTaskCommand {
                 }
             }
         }
+        println!("Imported task(s).");
+        state.save()?;
         Ok(())
     }
 }

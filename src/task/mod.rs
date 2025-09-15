@@ -1,4 +1,5 @@
 use crate::{RcCell, config::DisabledOptions, state::State};
+use crate::{Result, util::days_elapsed};
 use serde::Serialize;
 use time::{Date, OffsetDateTime};
 
@@ -10,6 +11,7 @@ pub use set::*;
 pub use state::*;
 
 pub const DEFAULT_WEIGHT: f64 = 1.0;
+pub const DEFAULT_SPOONS: u16 = 3;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -30,6 +32,7 @@ pub struct TaskInfo {
     #[serde(skip_serializing_if = "std::option::Option::is_none")]
     pub description: Option<String>,
     pub weight: f64,
+    pub spoons: u16,
     #[serde(skip_serializing_if = "DisabledOptions::is_enabled")]
     pub disabled: DisabledOptions,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
@@ -76,7 +79,7 @@ macro_rules! impl_task_state_getters {
     }
 }
 impl_task_state_getters! {
-    disabled_at: Option<OffsetDateTime>,
+    disabled_on: Option<Date>,
     last_chosen: Option<Date>,
     completed: bool,
 }
@@ -95,6 +98,41 @@ impl Task {
             slug: String::from(config.slug()),
             config: RcCell::new(config),
             state: RcCell::new(state),
+        }
+    }
+
+    pub fn add_step(&mut self, step: StepBuilder) -> Result<usize> {
+        let mut config = self.config.borrow_mut();
+        let mut step = step.build()?;
+        if step.order > config.steps.len() {
+            step.order = config.steps.len();
+        }
+        let order = step.order;
+        {
+            let mut state = self.state.borrow_mut();
+            state.steps.insert(step.order, StepState::default());
+        }
+        config.steps.insert(step.order, step);
+        // Check if we have to change the order of all the steps...
+        if order < config.steps.len() - 1 {
+            config.recalculate_step_orders();
+        }
+        Ok(order)
+    }
+
+    pub fn remove_step(&mut self, order: usize) -> bool {
+        let mut config = self.config.borrow_mut();
+        if order >= config.steps.len() {
+            false
+        } else {
+            let mut state = self.state.borrow_mut();
+            state.steps.remove(order);
+            config.steps.remove(order);
+            // Check if we have to change the order of all the steps...
+            if order != config.steps.len() - 1 {
+                config.recalculate_step_orders();
+            }
+            true
         }
     }
 
@@ -138,6 +176,7 @@ impl Task {
             disabled: config.disabled.clone(),
             tags: config.tags.clone(),
             weight: config.weight,
+            spoons: config.spoons,
         }
     }
 
@@ -161,13 +200,31 @@ impl Task {
         match task_config.disabled {
             DisabledOptions::Enabled => false,
             DisabledOptions::Disabled => true,
-            DisabledOptions::Until(ref until) => todo!(),
-            DisabledOptions::For(ref for_) => todo!(),
+            DisabledOptions::Until(until) => until >= state.todays_date(),
+            DisabledOptions::For(for_) => {
+                state.days_since_today(task_state.disabled_on.unwrap()) >= for_ as i64
+            }
         }
     }
 
     /// Returns `true` if the task can be chosen today.
-    pub fn choosable(&self, state: &State) -> bool {
-        !(self.disabled(state) || state.todays_tasks().contains(&self.slug))
+    pub fn choosable(&self, the_state: &State) -> bool {
+        let config = self.config.borrow();
+        let state = self.state.borrow();
+        if !(self.disabled(the_state) || the_state.todays_tasks().contains(&self.slug)) {
+            false
+        } else if let Some(max_occurrences) = config.max_occurrences
+            && state.times_completed >= max_occurrences
+        {
+            false
+        } else if let Some(min_frequency) = config.min_frequency {
+            if let Some(last_chosen) = state.last_chosen {
+                the_state.days_since_today(last_chosen) >= min_frequency as i64
+            } else {
+                true
+            }
+        } else {
+            true
+        }
     }
 }

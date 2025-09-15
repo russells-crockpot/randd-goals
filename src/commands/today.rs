@@ -4,7 +4,7 @@ use crate::{
     picker::pick_todays_tasks,
     task::{TaskInfo, TaskSet, TaskStatus},
 };
-use clap::Parser;
+use clap::{Args, Subcommand};
 use clap_complete::{ArgValueCompleter, PathCompleter};
 use notify_rust::Notification;
 use serde::Serialize;
@@ -34,29 +34,40 @@ impl From<TaskInfo> for TaskListItem {
     }
 }
 
-fn get_and_print_task_list_items<S: AsRef<TaskSet>>(state: &State, tasks: S) -> Result<()> {
-    let task_items: BTreeMap<String, TaskListItem> = tasks
+fn get_task_list_items<S: AsRef<TaskSet>>(
+    state: &State,
+    tasks: S,
+) -> Result<BTreeMap<String, TaskListItem>> {
+    Ok(tasks
         .as_ref()
         .resolve(state)?
         .into_iter()
         .map(|t| t.info(state))
         .map(|i| (i.slug.clone(), i.into()))
-        .collect();
+        .collect())
+}
+
+fn get_and_print_task_list_items<S: AsRef<TaskSet>>(state: &State, tasks: S) -> Result<()> {
+    let task_items = get_task_list_items(state, tasks)?;
     let stdout = io::stdout();
     serde_yml::to_writer(stdout, &task_items)?;
     Ok(())
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Subcommand)]
 #[command(rename_all = "kebab")]
 pub enum TodayCommands {
     /// Get today's tasks.
+    #[command(alias = "g")]
     Get(GetTodaysTasksCommand),
+    /// Explicitly set one or more of today's tasks (TODO).
+    Set(SetTodaysTasksCommand),
     /// Replace some of today's tasks with new ones.
     Refresh(RefreshTodaysTasksCommand),
     /// Replace all of today's tasks.
     Reset(ResetTodaysTasksCommand),
     /// Mark task(s) as complete.
+    #[command(aliases = ["c", "done"])]
     Complete(CompleteTaskCommand),
 }
 
@@ -64,6 +75,7 @@ impl ExecutableCommand for TodayCommands {
     fn execute(self, state: State) -> Result<()> {
         match self {
             Self::Get(cmd) => cmd.execute(state),
+            Self::Set(cmd) => cmd.execute(state),
             Self::Refresh(cmd) => cmd.execute(state),
             Self::Reset(cmd) => cmd.execute(state),
             Self::Complete(cmd) => cmd.execute(state),
@@ -71,11 +83,14 @@ impl ExecutableCommand for TodayCommands {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct GetTodaysTasksCommand {
     #[arg(short, long)]
     /// Whether or not to send a desktop notification.
     pub notify: bool,
+    #[arg(short, long, conflicts_with = "notify")]
+    /// Whether or not to print to to the console.
+    pub quiet: bool,
 }
 
 impl ExecutableCommand for GetTodaysTasksCommand {
@@ -96,11 +111,24 @@ impl ExecutableCommand for GetTodaysTasksCommand {
                 .appname(env!("CARGO_PKG_NAME"))
                 .show()?;
         }
-        get_and_print_task_list_items(&state, state.todays_tasks())
+        if self.quiet {
+            get_task_list_items(&state, state.todays_tasks()).map(|_| ())
+        } else {
+            get_and_print_task_list_items(&state, state.todays_tasks())
+        }
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
+pub struct SetTodaysTasksCommand {}
+
+impl ExecutableCommand for SetTodaysTasksCommand {
+    fn execute(self, mut state: State) -> Result<()> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Args)]
 pub struct RefreshTodaysTasksCommand {
     #[arg(short, long)]
     /// Whether or not all completed tasks should also be refreshed
@@ -134,7 +162,7 @@ impl ExecutableCommand for RefreshTodaysTasksCommand {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Args)]
 pub struct ResetTodaysTasksCommand {}
 
 impl ExecutableCommand for ResetTodaysTasksCommand {
