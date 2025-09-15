@@ -143,6 +143,9 @@ pub struct AddTaskCommand {
     #[arg(short = 'f', long)]
     /// Minimum number of days before the task can be chosen again (unimplemented).
     pub min_frequency: Option<u32>,
+    #[arg(short = 'p', long)]
+    /// The number of spoons a task takes.
+    pub spoons: Option<u16>,
     #[arg()]
     /// The task's title/summary.
     pub task: String,
@@ -184,6 +187,9 @@ pub struct UpsertTaskCommand {
     #[arg(short = 'f', long)]
     /// Minimum number of days before the task can be chosen again (unimplemented).
     pub min_frequency: Option<u32>,
+    #[arg(short = 'p', long)]
+    /// The number of spoons a task takes.
+    pub spoons: Option<u16>,
     #[arg()]
     //TODO make not required
     /// The task's slug/id.
@@ -226,6 +232,9 @@ pub struct UpdateTaskCommand {
     #[arg(short = 'f', long)]
     /// Minimum number of days before the task can be chosen again (unimplemented).
     pub min_frequency: Option<u32>,
+    #[arg(short = 'p', long)]
+    /// The number of spoons a task takes.
+    pub spoons: Option<u16>,
     /// The task's slug/id.
     #[arg(add = ArgValueCompleter::new(completion::all_tasks))]
     pub slug: String,
