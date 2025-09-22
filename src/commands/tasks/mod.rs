@@ -314,7 +314,7 @@ impl ExecutableCommand for TaskDetailsCommand {
             .map(|i| (i.slug.clone(), i))
             .collect();
         let stdout = io::stdout();
-        serde_yml::to_writer(stdout, &infos)?;
+        serde_norway::to_writer(stdout, &infos)?;
         Ok(())
     }
 }
@@ -378,7 +378,7 @@ impl ExecutableCommand for ImportTaskCommand {
         let tasks: Vec<TaskConfig> = match self.file.extension() {
             Some("yml") | Some("yaml") => {
                 let data = fs::read(&self.file)?;
-                serde_yml::from_slice(&data)?
+                serde_norway::from_slice(&data)?
             }
             Some("csv") | Some("tsv") | Some("psv") => {
                 //TODO handle errors

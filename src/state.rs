@@ -1,6 +1,6 @@
 use crate::{
     Error, RcCell, Result, STATE_DIR, STATE_FILE_PATH,
-    config::Config,
+    config::{Config, LimitTasksBy},
     task::{Task, TaskConfig, TaskSet, TaskState},
     util::{days_elapsed, dt_with_cutoff, now},
 };
@@ -34,7 +34,7 @@ impl StateModel {
     pub fn load() -> Result<Self> {
         if STATE_FILE_PATH.exists() {
             let data = fs::read(&*STATE_FILE_PATH)?;
-            serde_yml::from_slice(&data).map_err(|e| e.into())
+            serde_norway::from_slice(&data).map_err(|e| e.into())
         } else {
             let state = Self::default();
             state.save()?;
@@ -49,7 +49,7 @@ impl StateModel {
             .truncate(true)
             .write(true)
             .open(&*STATE_FILE_PATH)?;
-        serde_yml::to_writer(file, self).map_err(|e| e.into())
+        serde_norway::to_writer(file, self).map_err(|e| e.into())
     }
 }
 
@@ -65,7 +65,7 @@ impl State {
         let config = Config::load()?;
         let model = if STATE_FILE_PATH.exists() {
             let data = fs::read(&*STATE_FILE_PATH)?;
-            serde_yml::from_slice(&data)?
+            serde_norway::from_slice(&data)?
         } else {
             StateModel::default()
         };
@@ -276,6 +276,12 @@ impl State {
     pub fn days_since_today(&self, date: Date) -> i64 {
         days_elapsed(self.config.today(), date)
     }
+
+    /// Returns the sum of all of today's task's spoons.
+    #[inline]
+    pub fn current_spoons(&self) -> u16 {
+        self.tasks.values().map(|t| t.spoons()).sum()
+    }
 }
 
 // Implements config delegates
@@ -291,8 +297,8 @@ impl State {
     }
 
     #[inline]
-    pub fn daily_tasks(&self) -> usize {
-        *self.config.daily_tasks()
+    pub fn limit_by(&self) -> &LimitTasksBy {
+        self.config.limit_by()
     }
 
     #[inline]

@@ -63,6 +63,7 @@ impl_task_config_getters! {
    task: String,
    description: Option<String>,
    weight: f64,
+   spoons: u16,
    tags: Vec<String>,
 }
 

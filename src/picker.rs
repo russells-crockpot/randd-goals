@@ -1,4 +1,4 @@
-use crate::{Result, state::State};
+use crate::{Result, config::LimitTasksBy, state::State};
 use rand::{SeedableRng as _, rngs::SmallRng, seq::IndexedRandom};
 
 /// Picks the given number of tasks from chooseable tasks _and_ updates them.
@@ -16,13 +16,12 @@ pub fn pick_tasks(num_tasks: usize, state: &State) -> Result<Vec<String>> {
         .collect())
 }
 
-/// Picks todays tasks, if needed. Returns `true` if any new tasks were added.
-pub fn pick_todays_tasks(state: &mut State) -> Result<bool> {
+fn pick_todays_tasks_by_num_tasks(num_tasks: usize, state: &mut State) -> Result<bool> {
     let num_tasks_to_generate = if state.todays_date() > state.last_generated_date() {
         state.todays_tasks_mut().clear();
-        state.daily_tasks()
+        num_tasks
     } else {
-        state.daily_tasks() - state.todays_tasks().len()
+        num_tasks - state.todays_tasks().len()
     };
     if num_tasks_to_generate > 0 {
         log::debug!("Picking {num_tasks_to_generate} new task(s)");
@@ -33,5 +32,28 @@ pub fn pick_todays_tasks(state: &mut State) -> Result<bool> {
     } else {
         log::debug!("No new tasks to pick.");
         Ok(false)
+    }
+}
+
+fn pick_todays_tasks_by_max_spoons(max_spoons: u16, state: &mut State) -> Result<bool> {
+    if state.todays_date() > state.last_generated_date() {
+        state.todays_tasks_mut().clear();
+    };
+    let current_spoons = state.current_spoons();
+    if current_spoons >= max_spoons {
+        return Ok(false);
+    }
+    todo!()
+}
+
+/// Picks todays tasks, if needed. Returns `true` if any new tasks were added.
+pub fn pick_todays_tasks(state: &mut State) -> Result<bool> {
+    match state.limit_by() {
+        LimitTasksBy::Tasks { tasks: num_tasks } => {
+            pick_todays_tasks_by_num_tasks(*num_tasks, state)
+        }
+        LimitTasksBy::Spoons { spoons: max_spoons } => {
+            pick_todays_tasks_by_max_spoons(*max_spoons, state)
+        }
     }
 }

@@ -50,7 +50,7 @@ fn get_task_list_items<S: AsRef<TaskSet>>(
 fn get_and_print_task_list_items<S: AsRef<TaskSet>>(state: &State, tasks: S) -> Result<()> {
     let task_items = get_task_list_items(state, tasks)?;
     let stdout = io::stdout();
-    serde_yml::to_writer(stdout, &task_items)?;
+    serde_norway::to_writer(stdout, &task_items)?;
     Ok(())
 }
 

@@ -20,7 +20,7 @@ pub struct Config {
     #[serde(default)]
     tasks: Vec<RcCell<TaskConfig>>,
     cut_off: Time,
-    daily_tasks: usize,
+    limit_by: LimitTasksBy,
     #[serde(skip)]
     #[getset(skip)]
     // We want this to be a OnceCell just in case we pass the cut-off while running.
@@ -37,14 +37,14 @@ impl Config {
             .truncate(true)
             .write(true)
             .open(&*CONFIG_FILE_PATH)?;
-        serde_yml::to_writer(file, self)?;
+        serde_norway::to_writer(file, self)?;
         Ok(())
     }
 
     pub fn load() -> Result<Self> {
         let mut config = if CONFIG_FILE_PATH.exists() {
             let data = fs::read(&*CONFIG_FILE_PATH)?;
-            serde_yml::from_slice(&data)?
+            serde_norway::from_slice(&data)?
         } else {
             let config = Self::default();
             config.save()?;
@@ -116,12 +116,19 @@ impl Default for Config {
             tasks_map: HashMap::new(),
             cut_off: *DEFAULT_CUT_OFF,
             effective_date: OnceCell::new(),
-            daily_tasks: 1,
+            limit_by: LimitTasksBy::Tasks { tasks: 1 },
         };
         // Populate what today is ASAP
         let _ = config.today();
         config
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, EnumIs, PartialEq)]
+#[serde(untagged)]
+pub enum LimitTasksBy {
+    Tasks { tasks: usize },
+    Spoons { spoons: u16 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, EnumIs, PartialEq)]

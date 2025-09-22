@@ -2,9 +2,9 @@ use crate::task::{StepBuilderError, TaskBuilderError};
 use camino::FromPathBufError as NonUtf8PathError;
 use csv::Error as CsvError;
 use notify_rust::error::Error as NotificationError;
-use paste::paste;
+use pastey::paste;
 use rand::distr::weighted::Error as RandWeightError;
-use serde_yml::Error as YamlError;
+use serde_norway::Error as YamlError;
 use snafu::{AsBacktrace, Backtrace, Snafu};
 use std::{io::Error as IoError, result::Result as BaseResult, string::FromUtf8Error};
 use time::{
