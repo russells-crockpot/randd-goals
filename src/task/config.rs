@@ -38,9 +38,6 @@ pub struct TaskConfig {
     pub disabled: DisabledOptions,
     #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
     pub tags: Vec<String>,
-    #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
-    #[builder(field(ty = "Vec<StepBuilder>", build = "self.build_steps()"))]
-    pub steps: Vec<StepConfig>,
 }
 
 impl TaskBuilder {
@@ -50,25 +47,6 @@ impl TaskBuilder {
         cell.set(get_default_slug(self.task.as_ref().unwrap()))
             .unwrap();
         cell
-    }
-
-    fn build_steps(&self) -> Vec<StepConfig> {
-        //TODO handle error
-        self.steps
-            .iter()
-            .flat_map(|s| s.build())
-            .enumerate()
-            .map(|(i, mut s)| {
-                s.order = i + 1;
-                s
-            })
-            .collect()
-    }
-
-    #[inline]
-    pub fn step(&mut self, step: StepBuilder) -> &mut Self {
-        self.steps.push(step);
-        self
     }
 
     pub fn slug(&mut self, value: String) -> &mut Self {
@@ -108,14 +86,6 @@ impl TaskConfig {
     #[inline]
     pub fn disable(&mut self) {
         self.disabled = DisabledOptions::Disabled;
-    }
-
-    #[inline]
-    pub(crate) fn recalculate_step_orders(&mut self) {
-        self.steps
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, mut step)| step.order = i + 1)
     }
 
     /// Takes the values from the `other` argument, and overrides the values in this struct as long
@@ -188,15 +158,4 @@ impl AddAssign<TaskBuilder> for TaskConfig {
     fn add_assign(&mut self, other: TaskBuilder) {
         self.update(other);
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Builder, Getters)]
-#[serde(rename_all = "kebab-case")]
-#[builder(name = "StepBuilder")]
-#[getset(get = "pub")]
-pub struct StepConfig {
-    pub title: String,
-    pub order: usize,
-    #[serde(default, skip_serializing_if = "std::option::Option::is_none")]
-    pub description: Option<String>,
 }

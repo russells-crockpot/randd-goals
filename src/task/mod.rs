@@ -102,41 +102,6 @@ impl Task {
         }
     }
 
-    pub fn add_step(&mut self, step: StepBuilder) -> Result<usize> {
-        let mut config = self.config.borrow_mut();
-        let mut step = step.build()?;
-        if step.order > config.steps.len() {
-            step.order = config.steps.len();
-        }
-        let order = step.order;
-        {
-            let mut state = self.state.borrow_mut();
-            state.steps.insert(step.order, StepState::default());
-        }
-        config.steps.insert(step.order, step);
-        // Check if we have to change the order of all the steps...
-        if order < config.steps.len() - 1 {
-            config.recalculate_step_orders();
-        }
-        Ok(order)
-    }
-
-    pub fn remove_step(&mut self, order: usize) -> bool {
-        let mut config = self.config.borrow_mut();
-        if order >= config.steps.len() {
-            false
-        } else {
-            let mut state = self.state.borrow_mut();
-            state.steps.remove(order);
-            config.steps.remove(order);
-            // Check if we have to change the order of all the steps...
-            if order != config.steps.len() - 1 {
-                config.recalculate_step_orders();
-            }
-            true
-        }
-    }
-
     pub fn reset(&self) {
         self.state.borrow_mut().reset();
     }

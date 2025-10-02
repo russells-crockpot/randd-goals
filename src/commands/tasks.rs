@@ -11,8 +11,6 @@ use cli_table::{Cell, Table};
 use std::{collections::BTreeMap, fs, io};
 use time::Date;
 
-pub mod steps;
-
 #[derive(Debug, Subcommand)]
 #[command(rename_all = "kebab")]
 pub enum TaskCommands {

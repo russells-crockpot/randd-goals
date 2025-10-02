@@ -12,8 +12,6 @@ pub struct TaskState {
     #[serde(default)]
     pub times_completed: u32,
     pub completed: bool,
-    #[serde(default, skip_serializing_if = "std::vec::Vec::is_empty")]
-    pub steps: Vec<StepState>,
 }
 
 impl TaskState {
@@ -39,10 +37,4 @@ impl TaskState {
         self.reset();
         self.last_chosen = Some(state.todays_date());
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct StepState {
-    pub completed: bool,
 }

@@ -1,4 +1,4 @@
-use crate::task::{StepBuilderError, TaskBuilderError};
+use crate::task::TaskBuilderError;
 use camino::FromPathBufError as NonUtf8PathError;
 use csv::Error as CsvError;
 use notify_rust::error::Error as NotificationError;
@@ -57,7 +57,6 @@ impl_error! {
     Yaml,
     IndeterminateOffset,
     TaskBuilder,
-    StepBuilder,
     Csv,
     DateParsing,
 }
